@@ -21,13 +21,14 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 
 - [x] Spam pre-filter discards obvious non-CV emails before any LLM call — *Validated in Phase 3: Processing Pipeline*
 - [x] PDF and DOCX attachments are parsed to plain text (pdf-parse + mammoth) — *Validated in Phase 3*
+- [x] Agent 1 (Haiku): ExtractionAgentService with CandidateExtractSchema (8 fields, Zod), mock extract() wired into IngestionProcessor with fullName failure handling — *Validated in Phase 4: AI Extraction*
 
 ### Active
 
 - [ ] Postmark inbound webhook receives CV emails and verifies HMAC-SHA256 signature
 - [ ] Idempotency: duplicate webhook deliveries are detected via `MessageID` and silently skipped
 - [ ] API and Worker run as separate processes (separate Docker containers) — CPU-heavy work never blocks webhook receipt
-- [ ] Agent 1 (Haiku): extracts structured candidate fields from email + CV text via Vercel AI SDK + Zod
+- [ ] Agent 1 (Haiku): real Anthropic generateObject call enabled (scaffolded in Phase 4, activated in Phase 5+)
 - [ ] Original CV file is uploaded to Cloudflare R2 before dedup (Postmark does not retain attachments)
 - [ ] Duplicate detection runs in PostgreSQL via pg_trgm — no candidates loaded into memory
 - [ ] Exact email match → UPSERT; fuzzy match → INSERT new + `duplicate_flags` row for human review
@@ -101,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 after Phase 3 completion*
+*Last updated: 2026-03-22 after Phase 4 completion*
