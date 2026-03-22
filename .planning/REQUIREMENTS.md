@@ -7,12 +7,12 @@
 
 ### Webhook Intake
 
-- [ ] **WBHK-01**: System receives Postmark inbound webhook POST at `POST /webhooks/email` and responds within 100ms
-- [ ] **WBHK-02**: System verifies Postmark webhook signature (HMAC-SHA256) and returns 401 if invalid — prevents unauthorized record injection
-- [ ] **WBHK-03**: System checks `MessageID` against `email_intake_log` before enqueuing — duplicate webhook deliveries are silently skipped
-- [ ] **WBHK-04**: System inserts `email_intake_log` row (status: `pending`) before enqueuing — this row is the idempotency guard
-- [ ] **WBHK-05**: System enqueues job to BullMQ `ingest-email` queue with 3 retry attempts and exponential backoff on success
-- [ ] **WBHK-06**: Raw Postmark payload stored in `email_intake_log.raw_payload` with attachment binary blobs stripped
+- [x] **WBHK-01**: System receives Postmark inbound webhook POST at `POST /webhooks/email` and responds within 100ms
+- [x] **WBHK-02**: System verifies Postmark webhook signature (HMAC-SHA256) and returns 401 if invalid — prevents unauthorized record injection
+- [x] **WBHK-03**: System checks `MessageID` against `email_intake_log` before enqueuing — duplicate webhook deliveries are silently skipped
+- [x] **WBHK-04**: System inserts `email_intake_log` row (status: `pending`) before enqueuing — this row is the idempotency guard
+- [x] **WBHK-05**: System enqueues job to BullMQ `ingest-email` queue with 3 retry attempts and exponential backoff on success
+- [x] **WBHK-06**: Raw Postmark payload stored in `email_intake_log.raw_payload` with attachment binary blobs stripped
 
 ### Processing Pipeline
 
@@ -118,12 +118,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WBHK-01 | Phase 2 | Pending |
-| WBHK-02 | Phase 2 | Pending |
-| WBHK-03 | Phase 2 | Pending |
-| WBHK-04 | Phase 2 | Pending |
-| WBHK-05 | Phase 2 | Pending |
-| WBHK-06 | Phase 2 | Pending |
+| WBHK-01 | Phase 2 | Complete |
+| WBHK-02 | Phase 2 | Complete |
+| WBHK-03 | Phase 2 | Complete |
+| WBHK-04 | Phase 2 | Complete |
+| WBHK-05 | Phase 2 | Complete |
+| WBHK-06 | Phase 2 | Complete |
 | PROC-01 | Phase 1 | Pending |
 | PROC-02 | Phase 3 | Pending |
 | PROC-03 | Phase 3 | Pending |
