@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PostmarkPayloadDto } from '../webhooks/dto/postmark-payload.dto';
 import { SpamFilterService } from './services/spam-filter.service';
 import { AttachmentExtractorService } from './services/attachment-extractor.service';
+import { ExtractionAgentService, CandidateExtract } from './services/extraction-agent.service';
 
 export interface ProcessingContext {
   fullText: string;
@@ -21,6 +22,7 @@ export class IngestionProcessor extends WorkerHost {
     private readonly attachmentExtractor: AttachmentExtractorService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly extractionAgent: ExtractionAgentService,
   ) {
     super();
   }
@@ -68,17 +70,50 @@ export class IngestionProcessor extends WorkerHost {
       .filter(Boolean)
       .join('\n\n');
 
-    // Phase 3 output — ProcessingContext passed to Phase 4 inline (same processor method)
-    // Phase 4 will use: { fullText, suspicious: filterResult.suspicious }
-    const _context: ProcessingContext = {
+    // Phase 3 output — passed to Phase 4 inline
+    const context: ProcessingContext = {
       fullText,
       suspicious: filterResult.suspicious,
     };
 
-    // Phase 4 stub — AI extraction will be implemented in Phase 4
+    // Phase 4: AI extraction (D-06 mock — real call activated in follow-up task)
+    let extraction: CandidateExtract;
+    try {
+      extraction = await this.extractionAgent.extract(
+        context.fullText,
+        context.suspicious,
+      );
+    } catch (err) {
+      // D-04: extraction failure → mark as failed, do not insert placeholder
+      await this.prisma.emailIntakeLog.update({
+        where: {
+          idx_intake_message_id: { tenantId, messageId: payload.MessageID },
+        },
+        data: { processingStatus: 'failed' },
+      });
+      this.logger.error(
+        `Extraction failed for MessageID: ${payload.MessageID} — ${(err as Error).message}`,
+      );
+      return;
+    }
+
+    // D-04, D-05: empty fullName is treated the same as extraction failure
+    if (!extraction.fullName?.trim()) {
+      await this.prisma.emailIntakeLog.update({
+        where: {
+          idx_intake_message_id: { tenantId, messageId: payload.MessageID },
+        },
+        data: { processingStatus: 'failed' },
+      });
+      this.logger.error(
+        `Extraction returned empty fullName for MessageID: ${payload.MessageID}`,
+      );
+      return;
+    }
+
     this.logger.log(
-      `Phase 3 complete for MessageID: ${payload.MessageID} ` +
-        `(${fullText.length} chars, suspicious: ${filterResult.suspicious})`,
+      `Phase 4 complete for MessageID: ${payload.MessageID} — extracted: ${extraction.fullName}`,
     );
+    // Phase 5 stub — file storage will be implemented in Phase 5
   }
 }

@@ -3,11 +3,17 @@ import { BullModule } from '@nestjs/bullmq';
 import { IngestionProcessor } from './ingestion.processor';
 import { SpamFilterService } from './services/spam-filter.service';
 import { AttachmentExtractorService } from './services/attachment-extractor.service';
+import { ExtractionAgentService } from './services/extraction-agent.service';
 
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'ingest-email' }),
   ],
-  providers: [IngestionProcessor, SpamFilterService, AttachmentExtractorService],
+  providers: [
+    IngestionProcessor,
+    SpamFilterService,
+    AttachmentExtractorService,
+    ExtractionAgentService,
+  ],
 })
 export class IngestionModule {}
