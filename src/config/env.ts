@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 export const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+  DATABASE_URL: z.url(),
+  REDIS_URL: z.url(),
   ANTHROPIC_API_KEY: z.string().min(1),
   POSTMARK_WEBHOOK_TOKEN: z.string().min(1),
-  TENANT_ID: z.string().uuid(),
+  TENANT_ID: z.uuid(),
   R2_ACCOUNT_ID: z.string().min(1),
   R2_ACCESS_KEY_ID: z.string().min(1),
   R2_SECRET_ACCESS_KEY: z.string().min(1),
