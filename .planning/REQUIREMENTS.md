@@ -17,11 +17,11 @@
 ### Processing Pipeline
 
 - [ ] **PROC-01**: API and Worker run as separate Docker containers — CPU-heavy processing cannot block webhook receipt
-- [ ] **PROC-02**: Spam pre-filter discards emails with no attachment AND body < 100 chars before any LLM call
-- [ ] **PROC-03**: Spam pre-filter discards emails with marketing keywords in subject (`unsubscribe`, `newsletter`, `promotion`, `deal`, `offer`) before any LLM call
-- [ ] **PROC-04**: System extracts plain text from PDF attachments via `pdf-parse`
-- [ ] **PROC-05**: System extracts plain text from DOCX attachments via `mammoth`
-- [ ] **PROC-06**: System marks `email_intake_log` as `spam` and stops processing when spam filter rejects email
+- [x] **PROC-02**: Spam pre-filter discards emails with no attachment AND body < 100 chars before any LLM call
+- [x] **PROC-03**: Spam pre-filter discards emails with marketing keywords in subject (`unsubscribe`, `newsletter`, `promotion`, `deal`, `offer`) before any LLM call
+- [x] **PROC-04**: System extracts plain text from PDF attachments via `pdf-parse`
+- [x] **PROC-05**: System extracts plain text from DOCX attachments via `mammoth`
+- [x] **PROC-06**: System marks `email_intake_log` as `spam` and stops processing when spam filter rejects email
 
 ### AI Extraction
 
@@ -125,11 +125,11 @@
 | WBHK-05 | Phase 2 | Complete |
 | WBHK-06 | Phase 2 | Complete |
 | PROC-01 | Phase 1 | Pending |
-| PROC-02 | Phase 3 | Pending |
-| PROC-03 | Phase 3 | Pending |
-| PROC-04 | Phase 3 | Pending |
-| PROC-05 | Phase 3 | Pending |
-| PROC-06 | Phase 3 | Pending |
+| PROC-02 | Phase 3 | Complete |
+| PROC-03 | Phase 3 | Complete |
+| PROC-04 | Phase 3 | Complete |
+| PROC-05 | Phase 3 | Complete |
+| PROC-06 | Phase 3 | Complete |
 | AIEX-01 | Phase 4 | Pending |
 | AIEX-02 | Phase 4 | Pending |
 | AIEX-03 | Phase 4 | Pending |
