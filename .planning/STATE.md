@@ -69,6 +69,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 | 260322-qd4 | commit untracked phase context files | 2026-03-22 | 9678b11 | [260322-qd4-commit-untracked-phase-context-files](./quick/260322-qd4-commit-untracked-phase-context-files/) |
 | 260322-qxt | Update STATE.md narrative to accurately reflect all completed phases (01-04) and current position | 2026-03-22 | 601e3b7 | [260322-qxt-update-state-md-narrative-to-accurately-](./quick/260322-qxt-update-state-md-narrative-to-accurately-/) |
 | 260322-scj | Update STATE.md to reflect Phase 5 completion and Phase 6 readiness | 2026-03-22 | 3c54976 | [260322-scj-update-state-md-and-requirements-md-to-r](./quick/260322-scj-update-state-md-and-requirements-md-to-r/) |
+| 260322-uov | Fix 3 critical bugs: CV loss, BullMQ retry, race condition duplicate | 2026-03-22 | 9ee0841 | [260322-uov-fix-3-critical-bugs-in-implemented-phase](./quick/260322-uov-fix-3-critical-bugs-in-implemented-phase/) |
 
 ### Todos
 
@@ -76,7 +77,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 
 ## Session Continuity
 
-**Last Session:** 2026-03-22T18:11:08.657Z
+**Last Session:** 2026-03-22T20:10:28.000Z
 Last activity: 2026-03-22
 
 **What Happened:**
@@ -108,6 +109,12 @@ Last activity: 2026-03-22
    - 05-02: StorageService wired into IngestionProcessor via constructor injection; ProcessingContext extended with fileKey (string|null) and cvText fields; IngestionModule imports StorageModule; 3 integration tests (5-02-01, 5-02-02, 5-02-03) — 70 total tests passing across 11 suites
    - Verification: 6/6 must-haves verified — PASSED
    - Note: ExtractionAgentService.extract() remains a deterministic mock (TODO in Phase 4 code) — real Anthropic Haiku call still pending; does not block Phase 6
+
+6. Quick task 260322-uov — 3 critical bugs fixed in ingestion pipeline ✓
+   - BUG-CV-LOSS: storageService.upload() moved before extractionAgent.extract() — CV now persisted even on AI failure
+   - BUG-RETRY: Changed `return` to `throw err` in extraction catch — BullMQ now retries on transient failures
+   - BUG-RACE: Added jobId: messageId to both queue.add() calls + P2002 try/catch in prisma.create — concurrent duplicates handled gracefully
+   - 75 tests passing (5 new tests added), 11 suites, 0 failures
 
 **Next Step:**
 Phase 06 — Duplicate Detection. Run `/gsd:plan-phase 6` (or `/gsd:discuss-phase 6` first).
