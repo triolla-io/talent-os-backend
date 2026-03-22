@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { envSchema } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
+import { IngestionModule } from './ingestion/ingestion.module';
 
 @Module({
   imports: [
@@ -10,6 +12,15 @@ import { PrismaModule } from './prisma/prisma.module';
       validate: (config) => envSchema.parse(config),
     }),
     PrismaModule,
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          url: configService.get<string>('REDIS_URL'),
+        },
+      }),
+    }),
+    IngestionModule,
   ],
 })
 export class WorkerModule {}
