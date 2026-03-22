@@ -10,7 +10,7 @@
 - [ ] **Phase 1: Foundation** - Database schema, NestJS bootstrap, environment validation
 - [ ] **Phase 2: Webhook Intake & Idempotency** - Postmark webhook endpoint, HMAC verification, message ID tracking
 - [x] **Phase 3: Processing Pipeline & Spam Filter** - Email parsing (PDF/DOCX), spam pre-filtering before LLM (completed 2026-03-22)
-- [ ] **Phase 4: AI Extraction** - Claude Haiku agent extracts structured candidate fields
+- [x] **Phase 4: AI Extraction** - Claude Haiku agent extracts structured candidate fields (completed 2026-03-22)
 - [ ] **Phase 5: File Storage** - Original CV files uploaded to Cloudflare R2
 - [ ] **Phase 6: Duplicate Detection** - pg_trgm fuzzy matching, duplicate flags for human review
 - [ ] **Phase 7: Candidate Storage & Scoring** - Store candidates, score against active jobs with Claude Sonnet
@@ -99,12 +99,12 @@ Plans:
 2. All fields except fullName are nullable; agent never throws on missing optional fields
 3. Extracted data returned as typed object matching Zod schema; Vercel AI SDK used for generateObject call
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 04-00-PLAN.md — Wave 0: Create extraction-agent.service.spec.ts stub + minimal service stub
 - [x] 04-01-PLAN.md — Implement ExtractionAgentService (mock) with CandidateExtractSchema and 5 unit tests
-- [ ] 04-02-PLAN.md — Wire ExtractionAgentService into IngestionProcessor and IngestionModule; 2 integration tests
+- [x] 04-02-PLAN.md — Wire ExtractionAgentService into IngestionProcessor and IngestionModule; 2 integration tests
 
 ### Phase 5: File Storage
 
@@ -163,7 +163,7 @@ Plans:
 | 1. Foundation | 2/3 | In Progress|  |
 | 2. Webhook Intake & Idempotency | 2/3 | In Progress|  |
 | 3. Processing Pipeline & Spam Filter | 4/4 | Complete   | 2026-03-22 |
-| 4. AI Extraction | 2/3 | In Progress|  |
+| 4. AI Extraction | 3/3 | Complete   | 2026-03-22 |
 | 5. File Storage | 0/2 | Not started | — |
 | 6. Duplicate Detection | 0/3 | Not started | — |
 | 7. Candidate Storage & Scoring | 0/4 | Not started | — |
