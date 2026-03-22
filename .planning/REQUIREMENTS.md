@@ -25,9 +25,9 @@
 
 ### AI Extraction
 
-- [ ] **AIEX-01**: Agent 1 (claude-haiku-4-5) extracts structured candidate fields from email + CV text using Vercel AI SDK `generateObject` + Zod schema
-- [ ] **AIEX-02**: Extracted schema includes: `fullName`, `email`, `phone`, `currentRole`, `yearsExperience`, `skills[]`, `summary` (2-sentence AI summary), `source` enum
-- [ ] **AIEX-03**: All extracted fields are nullable (except `fullName`) — agent never throws on missing fields
+- [x] **AIEX-01**: Agent 1 (claude-haiku-4-5) extracts structured candidate fields from email + CV text using Vercel AI SDK `generateObject` + Zod schema
+- [x] **AIEX-02**: Extracted schema includes: `fullName`, `email`, `phone`, `currentRole`, `yearsExperience`, `skills[]`, `summary` (2-sentence AI summary), `source` enum
+- [x] **AIEX-03**: All extracted fields are nullable (except `fullName`) — agent never throws on missing fields
 
 ### File Storage
 
@@ -130,9 +130,9 @@
 | PROC-04 | Phase 3 | Complete |
 | PROC-05 | Phase 3 | Complete |
 | PROC-06 | Phase 3 | Complete |
-| AIEX-01 | Phase 4 | Pending |
-| AIEX-02 | Phase 4 | Pending |
-| AIEX-03 | Phase 4 | Pending |
+| AIEX-01 | Phase 4 | Complete |
+| AIEX-02 | Phase 4 | Complete |
+| AIEX-03 | Phase 4 | Complete |
 | STOR-01 | Phase 5 | Pending |
 | STOR-02 | Phase 5 | Pending |
 | STOR-03 | Phase 5 | Pending |
