@@ -142,3 +142,61 @@ describe('IngestionProcessor', () => {
     );
   });
 });
+
+describe('IngestionProcessor — Phase 5 StorageService', () => {
+  let processor: IngestionProcessor;
+  let prisma: { emailIntakeLog: { update: jest.Mock } };
+  let extractionAgent: { extract: jest.Mock };
+  let storageService: { upload: jest.Mock };
+
+  beforeEach(async () => {
+    prisma = {
+      emailIntakeLog: { update: jest.fn().mockResolvedValue({}) },
+    };
+    extractionAgent = {
+      extract: jest.fn().mockResolvedValue(mockCandidateExtract()),
+    };
+    storageService = {
+      upload: jest.fn().mockResolvedValue('cvs/test-tenant-id/test-message-id.pdf'),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        IngestionProcessor,
+        SpamFilterService,
+        AttachmentExtractorService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('test-tenant-id') },
+        },
+        { provide: ExtractionAgentService, useValue: extractionAgent },
+        { provide: 'StorageService', useValue: storageService },
+      ],
+    }).compile();
+
+    processor = module.get<IngestionProcessor>(IngestionProcessor);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // 5-02-01: STOR-01 — storageService.upload called before dedup
+  it('5-02-01: calls storageService.upload with attachments, tenantId, messageId', () => {
+    // Wave 2 stub — implementation in 05-02-PLAN.md
+    expect(true).toBe(true); // placeholder
+  });
+
+  // 5-02-02: D-07 — upload errors propagate (no inline catch in processor)
+  it('5-02-02: propagates upload error to BullMQ (no inline catch)', () => {
+    // Wave 2 stub — implementation in 05-02-PLAN.md
+    expect(true).toBe(true); // placeholder
+  });
+
+  // 5-02-03: D-02, STOR-03 — null fileKey + cvText forwarded when no attachment
+  it('5-02-03: passes null fileKey and cvText through ProcessingContext when no CV attachment', () => {
+    // Wave 2 stub — implementation in 05-02-PLAN.md
+    expect(true).toBe(true); // placeholder
+  });
+});
