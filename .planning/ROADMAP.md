@@ -99,11 +99,11 @@ Plans:
 2. All fields except fullName are nullable; agent never throws on missing optional fields
 3. Extracted data returned as typed object matching Zod schema; Vercel AI SDK used for generateObject call
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 04-00-PLAN.md — Wave 0: Create extraction-agent.service.spec.ts stub + minimal service stub
-- [ ] 04-01-PLAN.md — Implement ExtractionAgentService (mock) with CandidateExtractSchema and 5 unit tests
+- [x] 04-01-PLAN.md — Implement ExtractionAgentService (mock) with CandidateExtractSchema and 5 unit tests
 - [ ] 04-02-PLAN.md — Wire ExtractionAgentService into IngestionProcessor and IngestionModule; 2 integration tests
 
 ### Phase 5: File Storage
@@ -163,7 +163,7 @@ Plans:
 | 1. Foundation | 2/3 | In Progress|  |
 | 2. Webhook Intake & Idempotency | 2/3 | In Progress|  |
 | 3. Processing Pipeline & Spam Filter | 4/4 | Complete   | 2026-03-22 |
-| 4. AI Extraction | 1/3 | In Progress|  |
+| 4. AI Extraction | 2/3 | In Progress|  |
 | 5. File Storage | 0/2 | Not started | — |
 | 6. Duplicate Detection | 0/3 | Not started | — |
 | 7. Candidate Storage & Scoring | 0/4 | Not started | — |
