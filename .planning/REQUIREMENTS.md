@@ -31,9 +31,9 @@
 
 ### File Storage
 
-- [ ] **STOR-01**: Original CV file (PDF/DOCX) is uploaded to Cloudflare R2 at path `cvs/{tenantId}/{messageId}` before duplicate detection
-- [ ] **STOR-02**: R2 file URL is stored in `candidates.cv_file_url` — Postmark does not retain attachments after delivery
-- [ ] **STOR-03**: Full extracted CV text is stored in `candidates.cv_text` (PostgreSQL)
+- [x] **STOR-01**: Original CV file (PDF/DOCX) is uploaded to Cloudflare R2 at path `cvs/{tenantId}/{messageId}` before duplicate detection
+- [x] **STOR-02**: R2 file URL is stored in `candidates.cv_file_url` — Postmark does not retain attachments after delivery
+- [x] **STOR-03**: Full extracted CV text is stored in `candidates.cv_text` (PostgreSQL)
 
 ### Duplicate Detection
 
@@ -133,9 +133,9 @@
 | AIEX-01 | Phase 4 | Complete |
 | AIEX-02 | Phase 4 | Complete |
 | AIEX-03 | Phase 4 | Complete |
-| STOR-01 | Phase 5 | Pending |
-| STOR-02 | Phase 5 | Pending |
-| STOR-03 | Phase 5 | Pending |
+| STOR-01 | Phase 5 | Complete |
+| STOR-02 | Phase 5 | Complete |
+| STOR-03 | Phase 5 | Complete |
 | DEDUP-01 | Phase 6 | Pending |
 | DEDUP-02 | Phase 6 | Pending |
 | DEDUP-03 | Phase 6 | Pending |

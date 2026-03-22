@@ -122,7 +122,7 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 05-00-PLAN.md — Wave 1: Create StorageService stub, StorageModule, and failing test scaffolds (Nyquist setup)
+- [x] 05-00-PLAN.md — Wave 1: Create StorageService stub, StorageModule, and failing test scaffolds (Nyquist setup)
 - [ ] 05-01-PLAN.md — Wave 2: Implement StorageService (S3Client, attachment selection, R2 upload); 5 unit tests green
 - [ ] 05-02-PLAN.md — Wave 3: Wire StorageService into IngestionProcessor + IngestionModule; extend ProcessingContext; 3 integration tests green
 
