@@ -65,7 +65,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 
 ## Session Continuity
 
-**Last Session:** 2026-03-22T14:00:00.000Z
+**Last Session:** 2026-03-22T14:28:00.000Z
 
 **What Happened:**
 
@@ -74,6 +74,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
    - 01-02: Prisma schema (7 tables), migration, pg_trgm indexes, seed data
    - 01-03: Multi-stage Dockerfile + docker-compose.yml (4 services, health checks) — human checkpoint passed
 2. Docker Compose verified: all 4 services (api, worker, postgres, redis) started healthy
+3. Quick task 260322-kkx: Upgraded Prisma 6 → 7.5.0 with @prisma/adapter-pg; created prisma.config.ts; tsc clean; all unit tests pass
 
 **Next Step:**
 Phase 02 — Postmark Webhook intake. Run `/gsd:plan-phase 2` (or `/gsd:discuss-phase 2` first for context gathering).
