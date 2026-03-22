@@ -7,8 +7,8 @@
 
 ## Phases
 
-- [ ] **Phase 1: Foundation** - Database schema, NestJS bootstrap, environment validation
-- [ ] **Phase 2: Webhook Intake & Idempotency** - Postmark webhook endpoint, HMAC verification, message ID tracking
+- [x] **Phase 1: Foundation** - Database schema, NestJS bootstrap, environment validation (completed 2026-03-22)
+- [x] **Phase 2: Webhook Intake & Idempotency** - Postmark webhook endpoint, HMAC verification, message ID tracking (completed 2026-03-22)
 - [x] **Phase 3: Processing Pipeline & Spam Filter** - Email parsing (PDF/DOCX), spam pre-filtering before LLM (completed 2026-03-22)
 - [x] **Phase 4: AI Extraction** - Claude Haiku agent extracts structured candidate fields (completed 2026-03-22)
 - [ ] **Phase 5: File Storage** - Original CV files uploaded to Cloudflare R2
@@ -33,12 +33,12 @@
 5. Environment variables validated at startup via @nestjs/config + Zod; app fails fast on missing config
 6. Docker Compose runs all 4 services (api, worker, postgres, redis) locally with identical configuration to VPS
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md — Install dependencies, clean scaffold, bootstrap main.ts + worker.ts + env validation + PrismaService
 - [x] 01-02-PLAN.md — Prisma schema (7 tables), initial migration, pg_trgm indexes, seed data
-- [ ] 01-03-PLAN.md — Dockerfile (multi-stage), docker-compose.yml (4 services + health checks), .env.example
+- [x] 01-03-PLAN.md — Dockerfile (multi-stage), docker-compose.yml (4 services + health checks), .env.example
 
 ### Phase 2: Webhook Intake & Idempotency
 
@@ -56,7 +56,7 @@ Plans:
 5. Job enqueued to BullMQ ingest-email queue with 3 retry attempts and exponential backoff
 6. Raw Postmark payload stored in email_intake_log.raw_payload with attachment binary blobs stripped
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 02-01-PLAN.md — PostmarkPayloadDto (Zod), test spec scaffolds (guard/service/controller), IngestionProcessor stub
@@ -160,8 +160,8 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 2/3 | In Progress|  |
-| 2. Webhook Intake & Idempotency | 2/3 | In Progress|  |
+| 1. Foundation | 3/3 | Complete | 2026-03-22 |
+| 2. Webhook Intake & Idempotency | 3/3 | Complete | 2026-03-22 |
 | 3. Processing Pipeline & Spam Filter | 4/4 | Complete   | 2026-03-22 |
 | 4. AI Extraction | 3/3 | Complete   | 2026-03-22 |
 | 5. File Storage | 0/2 | Not started | — |
