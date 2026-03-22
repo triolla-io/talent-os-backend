@@ -4,7 +4,17 @@ import { StorageService } from './storage.service';
 import { PostmarkAttachmentDto } from '../webhooks/dto/postmark-payload.dto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
-jest.mock('@aws-sdk/client-s3');
+const mockS3Send = jest.fn();
+
+jest.mock('@aws-sdk/client-s3', () => {
+  const actual = jest.requireActual('@aws-sdk/client-s3');
+  return {
+    ...actual,
+    S3Client: jest.fn().mockImplementation(() => ({
+      send: mockS3Send,
+    })),
+  };
+});
 
 const mockConfigService = {
   get: jest.fn((key: string) => {
@@ -22,7 +32,7 @@ describe('StorageService', () => {
   let service: StorageService;
 
   beforeEach(async () => {
-    (S3Client as jest.MockedClass<typeof S3Client>).mockClear();
+    mockS3Send.mockReset();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         StorageService,
@@ -54,32 +64,63 @@ describe('StorageService', () => {
   });
 
   it('STOR-01: uploads largest PDF to R2 with correct key format', async () => {
-    await expect(
-      service.upload([pngAttachment(), pdfAttachment()], 'tenant-123', 'msg-456'),
-    ).rejects.toThrow(); // stub — will pass after Wave 1 implementation
+    mockS3Send.mockResolvedValue({});
+
+    const key = await service.upload(
+      [pngAttachment(), pdfAttachment()],
+      'tenant-123',
+      'msg-456',
+    );
+
+    expect(key).toBe('cvs/tenant-123/msg-456.pdf');
+    expect(mockS3Send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Key: 'cvs/tenant-123/msg-456.pdf',
+          Bucket: 'test-bucket',
+          ContentType: 'application/pdf',
+        }),
+      }),
+    );
   });
 
   it('STOR-01: returns null if no PDF/DOCX attachment found (D-02)', async () => {
-    await expect(
-      service.upload([pngAttachment()], 'tenant-123', 'msg-456'),
-    ).rejects.toThrow(); // stub — will return null after Wave 1
+    const key = await service.upload([pngAttachment()], 'tenant-123', 'msg-456');
+
+    expect(key).toBeNull();
+    expect(mockS3Send).not.toHaveBeenCalled();
   });
 
   it('STOR-02: does NOT return presigned URL, only object key', async () => {
-    await expect(
-      service.upload([pdfAttachment()], 'tenant-123', 'msg-456'),
-    ).rejects.toThrow(); // stub
+    mockS3Send.mockResolvedValue({});
+
+    const key = await service.upload([pdfAttachment()], 'tenant-123', 'msg-456');
+
+    expect(key).not.toContain('https://');
+    expect(key).not.toContain('r2.cloudflarestorage.com');
+    expect(key).toMatch(/^cvs\/[^/]+\/[^/]+\.(pdf|docx)$/);
   });
 
   it('D-11: sets explicit ContentType on PutObjectCommand', async () => {
-    await expect(
-      service.upload([docxAttachment()], 'tenant-123', 'msg-456'),
-    ).rejects.toThrow(); // stub
+    mockS3Send.mockResolvedValue({});
+
+    await service.upload([docxAttachment()], 'tenant-123', 'msg-456');
+
+    expect(mockS3Send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          ContentType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        }),
+      }),
+    );
   });
 
   it('D-07: propagates R2 errors to caller (no catch)', async () => {
+    mockS3Send.mockRejectedValue(new Error('R2 temporarily unavailable'));
+
     await expect(
       service.upload([pdfAttachment()], 'tenant-123', 'msg-456'),
-    ).rejects.toThrow(); // propagation test — already passes via stub throw
+    ).rejects.toThrow('R2 temporarily unavailable');
   });
 });
