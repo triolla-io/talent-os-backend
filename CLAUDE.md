@@ -9,7 +9,7 @@ An automated email intake pipeline for Triolla's recruiting platform. It receive
 
 ### Constraints
 
-- **Tech Stack:** TypeScript only, NestJS 11, BullMQ + Redis, Prisma 6, PostgreSQL 16, Vercel AI SDK — locked, not negotiable
+- **Tech Stack:** TypeScript only, NestJS 11, BullMQ + Redis, Prisma 7, PostgreSQL 16, Vercel AI SDK — locked, not negotiable
 - **AI Provider:** Anthropic Claude via `@ai-sdk/anthropic` — Haiku for extraction, Sonnet for scoring. No local models in Phase 1.
 - **Storage:** Cloudflare R2 for original CV files (S3-compatible, 10GB free tier)
 - **Email:** Postmark Inbound webhooks — no Gmail API polling in Phase 1
