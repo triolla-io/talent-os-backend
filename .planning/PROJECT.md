@@ -12,7 +12,10 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Postmark inbound webhook receives CV emails and verifies HTTP Basic Auth token — *Validated in Phase 2: Webhook Intake & Idempotency*
+- [x] Idempotency: duplicate webhook deliveries are detected via `MessageID` and silently skipped — *Validated in Phase 2*
+- [x] BullMQ enqueues jobs atomically with retry; attachment blobs stripped before DB write — *Validated in Phase 2*
+- [x] API and Worker run as separate Docker containers — *Validated in Phase 2*
 
 ### Active
 
@@ -95,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 after initialization*
+*Last updated: 2026-03-22 after Phase 2 completion*
