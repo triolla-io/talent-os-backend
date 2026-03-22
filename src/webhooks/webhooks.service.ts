@@ -34,7 +34,7 @@ export class WebhooksService {
     if (existing) {
       if (existing.processingStatus === 'pending') {
         // Enqueue failed previously — re-attempt (D-02: status=pending means retry is needed)
-        await this.ingestQueue.add('ingest-email', this.stripAttachmentBlobs(payload), {
+        await this.ingestQueue.add('ingest-email', payload, {
           attempts: 3,
           backoff: { type: 'exponential', delay: 5000 },
         });
@@ -65,7 +65,7 @@ export class WebhooksService {
 
     // Step 3: Enqueue to BullMQ — if this fails, return 5xx so Postmark retries (D-01)
     try {
-      await this.ingestQueue.add('ingest-email', sanitizedPayload, {
+      await this.ingestQueue.add('ingest-email', payload, {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
       });
