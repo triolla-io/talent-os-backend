@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -9,7 +10,7 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class PostmarkAuthGuard implements CanActivate {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(@Optional() private readonly configService: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<{ headers: Record<string, string> }>();
