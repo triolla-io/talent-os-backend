@@ -119,7 +119,12 @@ Plans:
 2. R2 file URL stored in candidates.cv_file_url; file remains accessible after Postmark webhook delivery
 3. Full extracted CV text stored in candidates.cv_text (PostgreSQL); no binary blobs in database
 
-**Plans:** TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 05-00-PLAN.md — Wave 1: Create StorageService stub, StorageModule, and failing test scaffolds (Nyquist setup)
+- [ ] 05-01-PLAN.md — Wave 2: Implement StorageService (S3Client, attachment selection, R2 upload); 5 unit tests green
+- [ ] 05-02-PLAN.md — Wave 3: Wire StorageService into IngestionProcessor + IngestionModule; extend ProcessingContext; 3 integration tests green
 
 ### Phase 6: Duplicate Detection
 
@@ -164,7 +169,7 @@ Plans:
 | 2. Webhook Intake & Idempotency | 3/3 | Complete | 2026-03-22 |
 | 3. Processing Pipeline & Spam Filter | 4/4 | Complete   | 2026-03-22 |
 | 4. AI Extraction | 3/3 | Complete   | 2026-03-22 |
-| 5. File Storage | 0/2 | Not started | — |
+| 5. File Storage | 0/3 | In progress | — |
 | 6. Duplicate Detection | 0/3 | Not started | — |
 | 7. Candidate Storage & Scoring | 0/4 | Not started | — |
 
