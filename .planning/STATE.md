@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
+status: in_progress
 last_updated: "2026-03-22T18:13:08.390Z"
 last_activity: 2026-03-22
 progress:
@@ -22,7 +22,7 @@ progress:
 
 **Core Value:** Inbound CVs are automatically processed, de-duplicated, and scored against open jobs without any manual recruiter effort — end-to-end from email receipt to scored candidate record.
 
-**Current Focus:** Phase 05 — file-storage
+**Current Focus:** Phase 06 — duplicate-detection
 
 **Tech Stack (Locked):** TypeScript, NestJS 11, BullMQ + Redis, Prisma 7, PostgreSQL 16, Vercel AI SDK, Claude Haiku + Sonnet, Cloudflare R2, Postmark Inbound webhooks.
 
@@ -68,6 +68,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 | 260322-lsq | Fix env and docker-compose inconsistency (prisma.config.ts root + docker env vars) | 2026-03-22 | a457e50 | [260322-lsq-fix-env-and-docker-compose-inconsistency](./quick/260322-lsq-fix-env-and-docker-compose-inconsistency/) |
 | 260322-qd4 | commit untracked phase context files | 2026-03-22 | 9678b11 | [260322-qd4-commit-untracked-phase-context-files](./quick/260322-qd4-commit-untracked-phase-context-files/) |
 | 260322-qxt | Update STATE.md narrative to accurately reflect all completed phases (01-04) and current position | 2026-03-22 | 601e3b7 | [260322-qxt-update-state-md-narrative-to-accurately-](./quick/260322-qxt-update-state-md-narrative-to-accurately-/) |
+| 260322-scj | Update STATE.md to reflect Phase 5 completion and Phase 6 readiness | 2026-03-22 | (pending) | [260322-scj-update-state-md-and-requirements-md-to-r](./quick/260322-scj-update-state-md-and-requirements-md-to-r/) |
 
 ### Todos
 
@@ -101,9 +102,15 @@ Last activity: 2026-03-22
    - 04-01: ExtractionAgentService (deterministic mock) with CandidateExtractSchema (Zod) + 5 unit tests (AIEX-01, AIEX-02, AIEX-03)
    - 04-02: ExtractionAgentService wired into IngestionProcessor + IngestionModule; 2 integration tests; 34 total tests passing
    - Note: ExtractionAgentService.extract() is a deterministic mock returning hardcoded 'Jane Doe' — real Anthropic Haiku call pending Phase 5 or follow-up
+5. Phase 05 (File Storage) — all 3 plans complete ✓
+   - 05-00: StorageService stub, StorageModule, and failing test scaffolds created (Nyquist setup)
+   - 05-01: StorageService (S3Client, PutObjectCommand, attachment selection, R2 key generation) with 5 unit tests (STOR-01, STOR-02, D-07, D-11)
+   - 05-02: StorageService wired into IngestionProcessor via constructor injection; ProcessingContext extended with fileKey (string|null) and cvText fields; IngestionModule imports StorageModule; 3 integration tests (5-02-01, 5-02-02, 5-02-03) — 70 total tests passing across 11 suites
+   - Verification: 6/6 must-haves verified — PASSED
+   - Note: ExtractionAgentService.extract() remains a deterministic mock (TODO in Phase 4 code) — real Anthropic Haiku call still pending; does not block Phase 6
 
 **Next Step:**
-Phase 05 — File Storage. Run `/gsd:plan-phase 5` (or `/gsd:discuss-phase 5` first).
+Phase 06 — Duplicate Detection. Run `/gsd:plan-phase 6` (or `/gsd:discuss-phase 6` first).
 
 ---
 
