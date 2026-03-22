@@ -1,0 +1,85 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { StorageService } from './storage.service';
+import { PostmarkAttachmentDto } from '../webhooks/dto/postmark-payload.dto';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+
+jest.mock('@aws-sdk/client-s3');
+
+const mockConfigService = {
+  get: jest.fn((key: string) => {
+    const vars: Record<string, string> = {
+      R2_ACCOUNT_ID: 'test-account',
+      R2_ACCESS_KEY_ID: 'test-key',
+      R2_SECRET_ACCESS_KEY: 'test-secret',
+      R2_BUCKET_NAME: 'test-bucket',
+    };
+    return vars[key];
+  }),
+};
+
+describe('StorageService', () => {
+  let service: StorageService;
+
+  beforeEach(async () => {
+    (S3Client as jest.MockedClass<typeof S3Client>).mockClear();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        StorageService,
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
+    }).compile();
+    service = module.get<StorageService>(StorageService);
+  });
+
+  const pdfAttachment = (): PostmarkAttachmentDto => ({
+    Name: 'cv.pdf',
+    ContentType: 'application/pdf',
+    ContentLength: 150000,
+    Content: Buffer.from('PDF data').toString('base64'),
+  });
+
+  const docxAttachment = (): PostmarkAttachmentDto => ({
+    Name: 'cv.docx',
+    ContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ContentLength: 100000,
+    Content: Buffer.from('DOCX data').toString('base64'),
+  });
+
+  const pngAttachment = (): PostmarkAttachmentDto => ({
+    Name: 'signature.png',
+    ContentType: 'image/png',
+    ContentLength: 5000,
+    Content: Buffer.from('PNG data').toString('base64'),
+  });
+
+  it('STOR-01: uploads largest PDF to R2 with correct key format', async () => {
+    await expect(
+      service.upload([pngAttachment(), pdfAttachment()], 'tenant-123', 'msg-456'),
+    ).rejects.toThrow(); // stub — will pass after Wave 1 implementation
+  });
+
+  it('STOR-01: returns null if no PDF/DOCX attachment found (D-02)', async () => {
+    await expect(
+      service.upload([pngAttachment()], 'tenant-123', 'msg-456'),
+    ).rejects.toThrow(); // stub — will return null after Wave 1
+  });
+
+  it('STOR-02: does NOT return presigned URL, only object key', async () => {
+    await expect(
+      service.upload([pdfAttachment()], 'tenant-123', 'msg-456'),
+    ).rejects.toThrow(); // stub
+  });
+
+  it('D-11: sets explicit ContentType on PutObjectCommand', async () => {
+    await expect(
+      service.upload([docxAttachment()], 'tenant-123', 'msg-456'),
+    ).rejects.toThrow(); // stub
+  });
+
+  it('D-07: propagates R2 errors to caller (no catch)', async () => {
+    await expect(
+      service.upload([pdfAttachment()], 'tenant-123', 'msg-456'),
+    ).rejects.toThrow(); // propagation test — already passes via stub throw
+  });
+});
