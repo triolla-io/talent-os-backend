@@ -100,10 +100,65 @@ describe('WebhooksService', () => {
         'ingest-email',
         expect.anything(),
         expect.objectContaining({
+          jobId: 'msg-abc-123',
           attempts: 3,
           backoff: { type: 'exponential', delay: 5000 },
         }),
       );
+    });
+  });
+
+  describe('uses messageId as jobId to prevent duplicate enqueue', () => {
+    it('uses messageId as jobId on fresh enqueue', async () => {
+      mockPrisma.emailIntakeLog.findUnique.mockResolvedValue(null);
+      mockPrisma.emailIntakeLog.create.mockResolvedValue({ id: 'log-1' });
+
+      await service.enqueue(basePayload);
+
+      expect(mockQueue.add).toHaveBeenCalledWith(
+        'ingest-email',
+        expect.anything(),
+        expect.objectContaining({ jobId: basePayload.MessageID }),
+      );
+    });
+
+    it('uses messageId as jobId on re-enqueue (pending status)', async () => {
+      mockPrisma.emailIntakeLog.findUnique.mockResolvedValue({
+        id: 'log-1',
+        processingStatus: 'pending',
+      });
+
+      await service.enqueue(basePayload);
+
+      expect(mockQueue.add).toHaveBeenCalledWith(
+        'ingest-email',
+        expect.anything(),
+        expect.objectContaining({ jobId: basePayload.MessageID }),
+      );
+    });
+  });
+
+  describe('handles P2002 unique constraint on concurrent create without crashing', () => {
+    it('handles concurrent P2002 unique constraint gracefully', async () => {
+      mockPrisma.emailIntakeLog.findUnique.mockResolvedValue(null);
+      mockPrisma.emailIntakeLog.create.mockRejectedValue({
+        code: 'P2002',
+        message: 'Unique constraint failed',
+      });
+
+      const result = await service.enqueue(basePayload);
+
+      expect(result).toEqual({ status: 'queued' });
+    });
+
+    it('rethrows non-P2002 db errors', async () => {
+      mockPrisma.emailIntakeLog.findUnique.mockResolvedValue(null);
+      mockPrisma.emailIntakeLog.create.mockRejectedValue({
+        code: 'P2003',
+        message: 'FK violation',
+      });
+
+      await expect(service.enqueue(basePayload)).rejects.toMatchObject({ code: 'P2003' });
     });
   });
 

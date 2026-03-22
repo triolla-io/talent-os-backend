@@ -35,6 +35,7 @@ export class WebhooksService {
       if (existing.processingStatus === 'pending') {
         // Enqueue failed previously — re-attempt (D-02: status=pending means retry is needed)
         await this.ingestQueue.add('ingest-email', payload, {
+          jobId: messageId,
           attempts: 3,
           backoff: { type: 'exponential', delay: 5000 },
         });
@@ -51,21 +52,31 @@ export class WebhooksService {
     // a Postmark retry finds the row with status=pending and re-enqueues safely.
     const sanitizedPayload = this.stripAttachmentBlobs(payload);
 
-    await this.prisma.emailIntakeLog.create({
-      data: {
-        tenantId,
-        messageId,
-        fromEmail: payload.From,
-        subject: payload.Subject ?? '',
-        receivedAt: new Date(payload.Date),
-        processingStatus: 'pending',
-        rawPayload: sanitizedPayload as object,
-      },
-    });
+    try {
+      await this.prisma.emailIntakeLog.create({
+        data: {
+          tenantId,
+          messageId,
+          fromEmail: payload.From,
+          subject: payload.Subject ?? '',
+          receivedAt: new Date(payload.Date),
+          processingStatus: 'pending',
+          rawPayload: sanitizedPayload as object,
+        },
+      });
+    } catch (err) {
+      // BUG-RACE fix: P2002 = unique constraint violation — concurrent duplicate request won the race
+      if ((err as any)?.code === 'P2002') {
+        this.logger.log(`Concurrent duplicate for MessageID: ${messageId} — skipping`);
+        return { status: 'queued' };
+      }
+      throw err; // All other DB errors propagate normally
+    }
 
     // Step 3: Enqueue to BullMQ — if this fails, return 5xx so Postmark retries (D-01)
     try {
       await this.ingestQueue.add('ingest-email', payload, {
+        jobId: messageId,
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
       });
