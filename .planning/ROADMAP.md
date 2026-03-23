@@ -12,7 +12,7 @@
 - [x] **Phase 3: Processing Pipeline & Spam Filter** - Email parsing (PDF/DOCX), spam pre-filtering before LLM (completed 2026-03-22)
 - [x] **Phase 4: AI Extraction** - Claude Haiku agent extracts structured candidate fields (completed 2026-03-22)
 - [x] **Phase 5: File Storage** - Original CV files uploaded to Cloudflare R2 (completed 2026-03-22)
-- [ ] **Phase 6: Duplicate Detection** - pg_trgm fuzzy matching, duplicate flags for human review
+- [x] **Phase 6: Duplicate Detection** - pg_trgm fuzzy matching, duplicate flags for human review (completed 2026-03-23)
 - [ ] **Phase 7: Candidate Storage & Scoring** - Store candidates, score against active jobs with Claude Sonnet
 
 ## Phase Details
@@ -141,12 +141,12 @@ Plans:
 4. pg_trgm GIN indexes on candidates.full_name and candidates.phone created in migration
 5. Dedup runs entirely in PostgreSQL; zero candidates loaded into application memory
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 06-00-PLAN.md — Wave 0: DedupModule skeleton, DedupService stub, 5+3 it.todo test stubs, ai_summary migration
 - [x] 06-01-PLAN.md — Wave 1: Implement DedupService (check/insertCandidate/upsertCandidate/createFlag); 5 unit tests green
-- [ ] 06-02-PLAN.md — Wave 2: Wire DedupService into IngestionProcessor + IngestionModule; extend ProcessingContext; 3 integration tests green
+- [x] 06-02-PLAN.md — Wave 2: Wire DedupService into IngestionProcessor + IngestionModule; extend ProcessingContext; 3 integration tests green
 
 ### Phase 7: Candidate Storage & Scoring
 
@@ -175,7 +175,7 @@ Plans:
 | 3. Processing Pipeline & Spam Filter | 4/4 | Complete   | 2026-03-22 |
 | 4. AI Extraction | 3/3 | Complete   | 2026-03-22 |
 | 5. File Storage | 3/3 | Complete   | 2026-03-22 |
-| 6. Duplicate Detection | 2/3 | In Progress|  |
+| 6. Duplicate Detection | 3/3 | Complete   | 2026-03-23 |
 | 7. Candidate Storage & Scoring | 0/4 | Not started | — |
 
 ---
