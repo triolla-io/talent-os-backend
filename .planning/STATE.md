@@ -70,6 +70,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 | 260322-qxt | Update STATE.md narrative to accurately reflect all completed phases (01-04) and current position | 2026-03-22 | 601e3b7 | [260322-qxt-update-state-md-narrative-to-accurately-](./quick/260322-qxt-update-state-md-narrative-to-accurately-/) |
 | 260322-scj | Update STATE.md to reflect Phase 5 completion and Phase 6 readiness | 2026-03-22 | 3c54976 | [260322-scj-update-state-md-and-requirements-md-to-r](./quick/260322-scj-update-state-md-and-requirements-md-to-r/) |
 | 260322-uov | Fix 3 critical bugs: CV loss, BullMQ retry, race condition duplicate | 2026-03-22 | 4b89bf4 | [260322-uov-fix-3-critical-bugs-in-implemented-phase](./quick/260322-uov-fix-3-critical-bugs-in-implemented-phase/) |
+| 260323-d4s | Fix Phase 6 bugs: pg_trgm % operator (wrong threshold), inverted name miss, non-atomic DB writes | 2026-03-23 | 6a9d372 | [260323-d4s-investigate-and-fix-4-reported-phase-6-i](./quick/260323-d4s-investigate-and-fix-4-reported-phase-6-i/) |
 
 ### Todos
 
@@ -77,7 +78,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 
 ## Session Continuity
 
-**Last Session:** 2026-03-23T07:15:44.084Z
+**Last Session:** 2026-03-23T08:00:00.000Z
 Last activity: 2026-03-23
 
 **What Happened:**
@@ -116,8 +117,15 @@ Last activity: 2026-03-23
    - BUG-RACE: Added jobId: messageId to both queue.add() calls + P2002 try/catch in prisma.create — concurrent duplicates handled gracefully
    - 75 tests passing (5 new tests added), 11 suites, 0 failures
 
+7. Quick task 260323-d4s — Phase 6 bug fixes (pg_trgm + atomicity) ✓
+   - Fixed pg_trgm % operator replaced with similarity() > 0.7 in SQL WHERE — threshold now enforced in SQL not app layer
+   - Added GREATEST(similarity(name), similarity(reversedName)) — inverted tokens (Smith John vs John Smith) now match
+   - Wrapped Phase 6 DB block in prisma.$transaction — candidate INSERT + flag + intake log update are atomic
+   - Added tx? param to DedupService.insertCandidate, upsertCandidate, createFlag — defaults to this.prisma
+   - 86 tests passing (3 new: DEDUP-06, DEDUP-07, atomicity test), 12 suites, 0 failures
+
 **Next Step:**
-Phase 06 — Duplicate Detection. Run `/gsd:plan-phase 6` (or `/gsd:discuss-phase 6` first).
+Phase 07 — run `/gsd:plan-phase 7`.
 
 ---
 
