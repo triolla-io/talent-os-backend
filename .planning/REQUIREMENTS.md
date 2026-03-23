@@ -124,7 +124,7 @@
 | WBHK-04 | Phase 2 | Complete |
 | WBHK-05 | Phase 2 | Complete |
 | WBHK-06 | Phase 2 | Complete |
-| PROC-01 | Phase 1 | Pending |
+| PROC-01 | Phase 8 | Pending |
 | PROC-02 | Phase 3 | Complete |
 | PROC-03 | Phase 3 | Complete |
 | PROC-04 | Phase 3 | Complete |
@@ -162,8 +162,8 @@
 | INFR-01 | Phase 1 | Complete |
 | INFR-02 | Phase 1 | Complete |
 | INFR-03 | Phase 1 | Complete |
-| INFR-04 | Phase 1 | Pending |
-| INFR-05 | Phase 1 | Pending |
+| INFR-04 | Phase 8 | Pending |
+| INFR-05 | Phase 8 | Pending |
 
 **Coverage:**
 - v1 requirements: 40 total

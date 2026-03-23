@@ -14,6 +14,7 @@
 - [x] **Phase 5: File Storage** - Original CV files uploaded to Cloudflare R2 (completed 2026-03-22)
 - [x] **Phase 6: Duplicate Detection** - pg_trgm fuzzy matching, duplicate flags for human review (completed 2026-03-23)
 - [x] **Phase 7: Candidate Storage & Scoring** - Store candidates, score against active jobs with Claude Sonnet (completed 2026-03-23)
+- [ ] **Phase 8: Phase 1 Verification** - Write VERIFICATION.md for Phase 1 foundation, close stale PROC-01/INFR-04/INFR-05 checkboxes
 
 ## Phase Details
 
@@ -170,6 +171,23 @@ Plans:
 - [x] 07-01-PLAN.md — Wave 1: Create ScoringModule + ScoringAgentService (mock-first, real call scaffolded); 3 unit tests
 - [x] 07-02-PLAN.md — Wave 2: Implement Phase 7 in IngestionProcessor (enrichment + scoring loop + terminal status); wire ScoringModule; 5 integration tests
 
+### Phase 8: Phase 1 Verification
+
+**Goal:** Close the v1.0 audit gap — write the missing Phase 1 VERIFICATION.md and update stale REQUIREMENTS.md checkboxes for PROC-01, INFR-04, and INFR-05.
+
+**Depends on:** Phase 7 (all implementation complete)
+
+**Requirements:** PROC-01, INFR-04, INFR-05
+
+**Gap Closure:** Closes gaps from v1.0-MILESTONE-AUDIT.md
+
+**Success Criteria** (what must be TRUE):
+1. `phases/01-foundation/VERIFICATION.md` exists and confirms docker-compose.yml, .env.example, and Worker bootstrap meet Phase 1 success criteria
+2. PROC-01, INFR-04, INFR-05 checkboxes marked `[x]` in REQUIREMENTS.md
+3. Traceability table updated: PROC-01, INFR-04, INFR-05 → Phase 8, Status: Complete
+
+**Plans:** TBD
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -181,6 +199,7 @@ Plans:
 | 5. File Storage | 3/3 | Complete   | 2026-03-22 |
 | 6. Duplicate Detection | 3/3 | Complete   | 2026-03-23 |
 | 7. Candidate Storage & Scoring | 2/2 | Complete   | 2026-03-23 |
+| 8. Phase 1 Verification | 0/? | Pending | — |
 
 ---
 
