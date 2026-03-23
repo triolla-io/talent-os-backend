@@ -5,11 +5,13 @@ import { SpamFilterService } from './services/spam-filter.service';
 import { AttachmentExtractorService } from './services/attachment-extractor.service';
 import { ExtractionAgentService } from './services/extraction-agent.service';
 import { StorageModule } from '../storage/storage.module';
+import { DedupModule } from '../dedup/dedup.module';
 
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'ingest-email' }),
     StorageModule,
+    DedupModule,  // provides DedupService to IngestionProcessor
   ],
   providers: [
     IngestionProcessor,
