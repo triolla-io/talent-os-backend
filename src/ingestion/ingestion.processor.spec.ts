@@ -9,6 +9,7 @@ import { ExtractionAgentService } from './services/extraction-agent.service';
 import { mockCandidateExtract } from './services/extraction-agent.service.spec';
 import { StorageService } from '../storage/storage.service';
 import { DedupService } from '../dedup/dedup.service';
+import { ScoringAgentService } from '../scoring/scoring.service';
 
 // Mock pdf-parse and mammoth so AttachmentExtractorService doesn't crash on fake content
 jest.mock('pdf-parse', () => jest.fn().mockResolvedValue({ text: 'pdf text' }));
@@ -463,5 +464,212 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
     expect(dedupService.insertCandidate).toHaveBeenCalledTimes(1);
     // The tx emailIntakeLog.update threw — simulating that Prisma would roll back
     expect(txClient.emailIntakeLog.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => {
+  let processor: IngestionProcessor;
+  let prisma: {
+    emailIntakeLog: { update: jest.Mock };
+    $transaction: jest.Mock;
+    candidate: { update: jest.Mock };
+    job: { findMany: jest.Mock };
+    application: { upsert: jest.Mock };
+    candidateJobScore: { create: jest.Mock };
+  };
+  let extractionAgent: { extract: jest.Mock };
+  let storageService: { upload: jest.Mock };
+  let dedupService: { check: jest.Mock; insertCandidate: jest.Mock; upsertCandidate: jest.Mock; createFlag: jest.Mock };
+  let scoringService: { score: jest.Mock };
+
+  const activeJob = { id: 'job-id-1', title: 'Backend Engineer', description: 'Build APIs.', requirements: ['TypeScript'] };
+
+  beforeEach(async () => {
+    const txClient = {
+      emailIntakeLog: { update: jest.fn().mockResolvedValue({}) },
+    };
+
+    prisma = {
+      emailIntakeLog: { update: jest.fn().mockResolvedValue({}) },
+      $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof txClient) => Promise<void>) => cb(txClient)),
+      candidate: { update: jest.fn().mockResolvedValue({}) },
+      job: { findMany: jest.fn().mockResolvedValue([activeJob]) },
+      application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id-1' }) },
+      candidateJobScore: { create: jest.fn().mockResolvedValue({}) },
+    };
+
+    extractionAgent = {
+      extract: jest.fn().mockResolvedValue({
+        fullName: 'Jane Doe',
+        email: 'jane.doe@example.com',
+        phone: '+1-555-0100',
+        currentRole: 'Senior Software Engineer',
+        yearsExperience: 7,
+        skills: ['TypeScript', 'Node.js'],
+        summary: 'Experienced engineer. Strong in distributed systems.',
+        source: 'direct',
+        suspicious: false,
+      }),
+    };
+
+    storageService = {
+      upload: jest.fn().mockResolvedValue('cvs/test-tenant-id/msg-id.pdf'),
+    };
+
+    dedupService = {
+      check: jest.fn().mockResolvedValue(null),
+      insertCandidate: jest.fn().mockResolvedValue('new-candidate-id'),
+      upsertCandidate: jest.fn().mockResolvedValue(undefined),
+      createFlag: jest.fn().mockResolvedValue(undefined),
+    };
+
+    scoringService = {
+      score: jest.fn().mockResolvedValue({
+        score: 72,
+        reasoning: 'Good match.',
+        strengths: ['TypeScript'],
+        gaps: [],
+        modelUsed: 'claude-sonnet-4-6',
+      }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        IngestionProcessor,
+        SpamFilterService,
+        AttachmentExtractorService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('test-tenant-id') } },
+        { provide: ExtractionAgentService, useValue: extractionAgent },
+        { provide: StorageService, useValue: storageService },
+        { provide: DedupService, useValue: dedupService },
+        { provide: ScoringAgentService, useValue: scoringService },
+      ],
+    }).compile();
+
+    processor = module.get<IngestionProcessor>(IngestionProcessor);
+  });
+
+  afterEach(() => jest.clearAllMocks());
+
+  const validJobPayload = () =>
+    mockPostmarkPayload({
+      MessageID: 'msg-phase7-test',
+      From: 'sender@example.com',
+      Subject: 'Job Application from Jane Doe',
+      TextBody:
+        'Dear Hiring Manager, I have 7 years of TypeScript experience. Please find my CV attached.',
+      Attachments: [],
+    });
+
+  // 7-02-01: CAND-01 — candidate.update called with all enrichment fields
+  it('7-02-01: CAND-01 — candidate.update called with all enrichment fields', async () => {
+    const job = { id: 'test-p7-1', data: validJobPayload() } as any;
+    await processor.process(job);
+
+    expect(prisma.candidate.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'new-candidate-id' },
+        data: expect.objectContaining({
+          currentRole: 'Senior Software Engineer',
+          yearsExperience: 7,
+          skills: ['TypeScript', 'Node.js'],
+          cvText: expect.any(String),
+          cvFileUrl: expect.any(String),
+          aiSummary: 'Experienced engineer. Strong in distributed systems.',
+          metadata: null,
+        }),
+      }),
+    );
+  });
+
+  // 7-02-02: SCOR-01 — job.findMany called with active status filter
+  it('7-02-02: SCOR-01 — job.findMany called with tenantId and status=active', async () => {
+    const job = { id: 'test-p7-2', data: validJobPayload() } as any;
+    await processor.process(job);
+
+    expect(prisma.job.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId: 'test-tenant-id', status: 'active' },
+      }),
+    );
+  });
+
+  // 7-02-03: SCOR-02 + SCOR-04 — application upserted then score created per active job
+  it('7-02-03: SCOR-02 + SCOR-04 — application upserted and candidateJobScore created per job', async () => {
+    const job = { id: 'test-p7-3', data: validJobPayload() } as any;
+    await processor.process(job);
+
+    expect(prisma.application.upsert).toHaveBeenCalledTimes(1);
+    expect(prisma.application.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { idx_applications_unique: { tenantId: 'test-tenant-id', candidateId: 'new-candidate-id', jobId: 'job-id-1' } },
+        create: expect.objectContaining({ stage: 'new' }),
+        update: {},
+      }),
+    );
+    expect(prisma.candidateJobScore.create).toHaveBeenCalledTimes(1);
+    expect(prisma.candidateJobScore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          applicationId: 'app-id-1',
+          score: 72,
+          modelUsed: 'claude-sonnet-4-6',
+        }),
+      }),
+    );
+  });
+
+  // 7-02-04: SCOR-01 no active jobs — scoring loop skipped, status still completed
+  it('7-02-04: SCOR-01 — no active jobs: scoring loop skipped, processingStatus still set to completed', async () => {
+    prisma.job.findMany.mockResolvedValueOnce([]);
+
+    const job = { id: 'test-p7-4', data: validJobPayload() } as any;
+    await processor.process(job);
+
+    expect(prisma.application.upsert).not.toHaveBeenCalled();
+    expect(scoringService.score).not.toHaveBeenCalled();
+    expect(prisma.emailIntakeLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { processingStatus: 'completed' } }),
+    );
+  });
+
+  // 7-02-05: D-16 — processingStatus 'completed' is set as the LAST prisma call
+  it('7-02-05: D-16 — processingStatus=completed set after all scoring (last prisma call)', async () => {
+    const job = { id: 'test-p7-5', data: validJobPayload() } as any;
+    await processor.process(job);
+
+    const allUpdateCalls: Array<{ data: Record<string, unknown> }> = prisma.emailIntakeLog.update.mock.calls.map(
+      (call: [{ data: Record<string, unknown> }]) => call[0],
+    );
+    const lastUpdateCall = allUpdateCalls[allUpdateCalls.length - 1];
+    expect(lastUpdateCall?.data).toEqual({ processingStatus: 'completed' });
+    // Scoring happened before the final status update
+    expect(prisma.candidateJobScore.create).toHaveBeenCalled();
+  });
+
+  // 7-02-06: Issue Fix 2 — Scoring error for one job does not fail entire candidate
+  it('7-02-06: Issue Fix 2 — scoring fails for one job; other jobs continue (error isolation)', async () => {
+    const job2 = { id: 'job-id-2', title: 'Frontend Engineer', description: 'Build UIs.', requirements: ['React'] };
+    prisma.job.findMany.mockResolvedValueOnce([activeJob, job2]);
+
+    // First call succeeds, second fails
+    scoringService.score
+      .mockResolvedValueOnce({ score: 72, reasoning: 'Good.', strengths: ['TS'], gaps: [], modelUsed: 'claude-sonnet-4-6' })
+      .mockRejectedValueOnce(new Error('Anthropic API timeout'));
+
+    const jobData = { id: 'test-p7-6', data: validJobPayload() } as any;
+    await processor.process(jobData);
+
+    // Both jobs should have attempted upsert (both applications created)
+    expect(prisma.application.upsert).toHaveBeenCalledTimes(2);
+
+    // Only one score created (second job's scoring failed)
+    expect(prisma.candidateJobScore.create).toHaveBeenCalledTimes(1);
+
+    // Final status should still be completed (error in scoring loop doesn't prevent completion)
+    expect(prisma.emailIntakeLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { processingStatus: 'completed' } }),
+    );
   });
 });
