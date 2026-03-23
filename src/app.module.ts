@@ -4,6 +4,9 @@ import { BullModule } from '@nestjs/bullmq';
 import { envSchema } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { CandidatesModule } from './candidates/candidates.module';
+import { JobsModule } from './jobs/jobs.module';
+import { ApplicationsModule } from './applications/applications.module';
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { WebhooksModule } from './webhooks/webhooks.module';
       }),
     }),
     WebhooksModule,
+    CandidatesModule,
+    JobsModule,
+    ApplicationsModule,
   ],
 })
 export class AppModule {}
