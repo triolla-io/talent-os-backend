@@ -1,6 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PostmarkPayloadDto } from '../webhooks/dto/postmark-payload.dto';
@@ -158,6 +159,94 @@ export class IngestionProcessor extends WorkerHost {
     context.candidateId = candidateId!;
 
     this.logger.log(`Phase 6 complete for MessageID: ${payload.MessageID} — candidateId: ${candidateId}`);
-    // Phase 7 stub — candidate enrichment + scoring will be implemented in Phase 7
+
+    // Phase 7: Candidate enrichment (CAND-01, D-01, D-02, D-03)
+    await this.prisma.candidate.update({
+      where: { id: context.candidateId },
+      data: {
+        currentRole: extraction.currentRole ?? null,
+        yearsExperience: extraction.yearsExperience ?? null,
+        skills: extraction.skills ?? [],
+        cvText: context.cvText,
+        cvFileUrl: context.fileKey, // R2 object key used as URL placeholder in Phase 1 (D-02)
+        aiSummary: extraction.summary ?? null,
+        metadata: Prisma.JsonNull,   // D-03: deferred to future phase (Prisma requires JsonNull not null)
+      },
+    });
+
+    this.logger.log(`Phase 7 enrichment complete for MessageID: ${payload.MessageID}`);
+
+    // Phase 7: Active jobs fetch (SCOR-01, D-11)
+    const activeJobs = await this.prisma.job.findMany({
+      where: { tenantId, status: 'active' },
+      select: { id: true, title: true, description: true, requirements: true },
+    });
+
+    // D-11: if no active jobs, skip loop entirely — still mark as completed
+    for (const job of activeJobs) {
+      // SCOR-02 (D-12): upsert application row first — idempotent on retry
+      const application = await this.prisma.application.upsert({
+        where: {
+          idx_applications_unique: {
+            tenantId,
+            candidateId: context.candidateId,
+            jobId: job.id,
+          },
+        },
+        create: { tenantId, candidateId: context.candidateId, jobId: job.id, stage: 'new' },
+        update: {}, // No-op on retry — idempotent
+        select: { id: true },
+      });
+
+      // SCOR-03 (D-07): score candidate against job with error isolation (Issue Fix 2)
+      let scoreResult;
+      try {
+        scoreResult = await this.scoringService.score({
+          cvText: context.cvText,
+          candidateFields: {
+            currentRole: extraction.currentRole ?? null,
+            yearsExperience: extraction.yearsExperience ?? null,
+            skills: extraction.skills ?? [],
+          },
+          job: {
+            title: job.title,
+            description: job.description ?? null,
+            requirements: job.requirements,
+          },
+        } satisfies ScoringInput);
+      } catch (err) {
+        // Issue Fix 2: Log and continue — don't fail the entire candidate on one bad job score
+        this.logger.error(
+          `Scoring failed for candidateId: ${context.candidateId}, jobId: ${job.id} — ${(err as Error).message}`,
+        );
+        // D-13: If we skip the INSERT on error, this application has no score. This is acceptable.
+        // Phase 2 can filter applications without scores if needed.
+        continue;
+      }
+
+      // SCOR-04, SCOR-05 (D-13): append-only INSERT — never upsert
+      // D-13: Score INSERTs are append-only. Retries will create duplicate rows — acceptable for Phase 1.
+      await this.prisma.candidateJobScore.create({
+        data: {
+          tenantId,
+          applicationId: application.id,
+          score: scoreResult.score,
+          reasoning: scoreResult.reasoning,
+          strengths: scoreResult.strengths,
+          gaps: scoreResult.gaps,
+          modelUsed: scoreResult.modelUsed,
+        },
+      });
+
+      this.logger.log(`Phase 7 scored candidateId: ${context.candidateId} against jobId: ${job.id} — score: ${scoreResult.score}`);
+    }
+
+    // D-16: terminal status — set AFTER all Phase 7 work completes (only reached if no error thrown)
+    await this.prisma.emailIntakeLog.update({
+      where: { idx_intake_message_id: { tenantId, messageId: payload.MessageID } },
+      data: { processingStatus: 'completed' },
+    });
+
+    this.logger.log(`Phase 7 complete for MessageID: ${payload.MessageID} — pipeline finished`);
   }
 }
