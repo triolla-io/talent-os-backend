@@ -34,7 +34,18 @@ if [ -z "$TUNNEL_URL" ]; then
   exit 1
 fi
 
-WEBHOOK_URL="${TUNNEL_URL}${WEBHOOK_PATH}"
+# Attempt to read POSTMARK_WEBHOOK_TOKEN from .env file
+POSTMARK_TOKEN=""
+if [ -f .env ]; then
+  POSTMARK_TOKEN=$(grep -E "^POSTMARK_WEBHOOK_TOKEN=" .env | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+fi
+
+if [ -n "$POSTMARK_TOKEN" ]; then
+  # Inject Basic Auth credentials natively into the URL (https://username:password@domain.com)
+  WEBHOOK_URL=$(echo "$TUNNEL_URL" | sed "s|https://|https://postmark:${POSTMARK_TOKEN}@|")"${WEBHOOK_PATH}"
+else
+  WEBHOOK_URL="${TUNNEL_URL}${WEBHOOK_PATH}"
+fi
 
 echo ""
 echo "=========================================="
