@@ -13,9 +13,9 @@ import { DedupService, DedupResult } from '../dedup/dedup.service';
 export interface ProcessingContext {
   fullText: string;
   suspicious: boolean;
-  fileKey: string | null;  // R2 object key (D-04) or null if no CV attachment found
-  cvText: string;          // Phase 3 extracted text — written to candidates.cv_text in Phase 7
-  candidateId: string;     // Phase 6 output — set immediately after INSERT/UPSERT; consumed by Phase 7
+  fileKey: string | null; // R2 object key (D-04) or null if no CV attachment found
+  cvText: string; // Phase 3 extracted text — written to candidates.cv_text in Phase 7
+  candidateId: string; // Phase 6 output — set immediately after INSERT/UPSERT; consumed by Phase 7
 }
 
 @Processor('ingest-email')
@@ -64,49 +64,34 @@ export class IngestionProcessor extends WorkerHost {
     });
 
     // Step 1: Extract text from attachments (D-02, D-03)
-    const attachmentText = await this.attachmentExtractor.extract(
-      payload.Attachments ?? [],
-    );
+    const attachmentText = await this.attachmentExtractor.extract(payload.Attachments ?? []);
 
     // Build fullText: email body first, then attachment sections (D-02)
-    const bodySection = payload.TextBody?.trim()
-      ? `--- Email Body ---\n${payload.TextBody.trim()}`
-      : '';
+    const bodySection = payload.TextBody?.trim() ? `--- Email Body ---\n${payload.TextBody.trim()}` : '';
 
-    const fullText = [bodySection, attachmentText]
-      .filter(Boolean)
-      .join('\n\n');
+    const fullText = [bodySection, attachmentText].filter(Boolean).join('\n\n');
 
     // Phase 3 output — passed to Phase 4 inline
     const context: ProcessingContext = {
       fullText,
       suspicious: filterResult.suspicious,
-      fileKey: null,    // populated after Phase 5 upload below
+      fileKey: null, // populated after Phase 5 upload below
       cvText: fullText, // same as fullText — alias for Phase 7 clarity
-      candidateId: '',  // set by Phase 6 below
+      candidateId: '', // set by Phase 6 below
     };
 
     // Phase 5: Upload original CV to Cloudflare R2 BEFORE AI extraction (D-07: errors propagate to BullMQ, no catch)
     // BUG-CV-LOSS fix: upload must happen before extraction so the file is persisted even if AI fails
-    const fileKey = await this.storageService.upload(
-      payload.Attachments ?? [],
-      tenantId,
-      payload.MessageID,
-    );
+    const fileKey = await this.storageService.upload(payload.Attachments ?? [], tenantId, payload.MessageID);
     context.fileKey = fileKey;
     context.cvText = fullText;
 
-    this.logger.log(
-      `Phase 5 complete for MessageID: ${payload.MessageID} — fileKey: ${fileKey ?? 'none'}`,
-    );
+    this.logger.log(`Phase 5 complete for MessageID: ${payload.MessageID} — fileKey: ${fileKey ?? 'none'}`);
 
     // Phase 4: AI extraction (D-06 mock — real call activated in follow-up task)
     let extraction: CandidateExtract;
     try {
-      extraction = await this.extractionAgent.extract(
-        context.fullText,
-        context.suspicious,
-      );
+      extraction = await this.extractionAgent.extract(context.fullText, context.suspicious);
     } catch (err) {
       // D-04: extraction failure → mark as failed, do not insert placeholder
       await this.prisma.emailIntakeLog.update({
@@ -115,9 +100,7 @@ export class IngestionProcessor extends WorkerHost {
         },
         data: { processingStatus: 'failed' },
       });
-      this.logger.error(
-        `Extraction failed for MessageID: ${payload.MessageID} — ${(err as Error).message}`,
-      );
+      this.logger.error(`Extraction failed for MessageID: ${payload.MessageID} — ${(err as Error).message}`);
       // BUG-RETRY fix: re-throw so BullMQ sees a failure and retries via exponential backoff
       throw err;
     }
@@ -130,21 +113,17 @@ export class IngestionProcessor extends WorkerHost {
         },
         data: { processingStatus: 'failed' },
       });
-      this.logger.error(
-        `Extraction returned empty fullName for MessageID: ${payload.MessageID}`,
-      );
+      this.logger.error(`Extraction returned empty fullName for MessageID: ${payload.MessageID}`);
       return;
     }
 
-    this.logger.log(
-      `Phase 4 complete for MessageID: ${payload.MessageID} — extracted: ${extraction.fullName}`,
-    );
+    this.logger.log(`Phase 4 complete for MessageID: ${payload.MessageID} — extracted: ${extraction.fullName}`);
 
     // Phase 6: Duplicate detection + minimal candidate shell INSERT/UPSERT (atomic)
     // dedupService.check() runs OUTSIDE the transaction — read-only query, no benefit from holding lock
     const dedupResult: DedupResult | null = await this.dedupService.check(extraction, tenantId);
 
-    let candidateId: string;
+    let candidateId!: string;
 
     await this.prisma.$transaction(async (tx) => {
       if (dedupResult && dedupResult.confidence === 1.0) {
@@ -156,13 +135,7 @@ export class IngestionProcessor extends WorkerHost {
         // Fuzzy name match (DEDUP-03): INSERT new candidate shell + create duplicate_flags for human review
         // Never auto-merge — DEDUP-05, D-12
         candidateId = await this.dedupService.insertCandidate(extraction, tenantId, payload.From, tx);
-        await this.dedupService.createFlag(
-          candidateId,
-          dedupResult.match.id,
-          dedupResult.confidence,
-          tenantId,
-          tx,
-        );
+        await this.dedupService.createFlag(candidateId, dedupResult.match.id, dedupResult.confidence, tenantId, tx);
       } else {
         // No match (DEDUP-04): INSERT new candidate shell
         candidateId = await this.dedupService.insertCandidate(extraction, tenantId, payload.From, tx);
@@ -178,9 +151,7 @@ export class IngestionProcessor extends WorkerHost {
     // Pass candidateId to Phase 7 via context (D-16)
     context.candidateId = candidateId!;
 
-    this.logger.log(
-      `Phase 6 complete for MessageID: ${payload.MessageID} — candidateId: ${candidateId}`,
-    );
+    this.logger.log(`Phase 6 complete for MessageID: ${payload.MessageID} — candidateId: ${candidateId}`);
     // Phase 7 stub — candidate enrichment + scoring will be implemented in Phase 7
   }
 }
