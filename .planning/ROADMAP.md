@@ -164,10 +164,10 @@ Plans:
 5. Claude Sonnet scores candidate against each active job; returns score (0–100), reasoning, strengths[], gaps[]
 6. Scores inserted append-only to candidate_job_scores; existing scores never updated; model_used recorded
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 07-01-PLAN.md — Wave 1: Create ScoringModule + ScoringAgentService (mock-first, real call scaffolded); 3 unit tests
+- [x] 07-01-PLAN.md — Wave 1: Create ScoringModule + ScoringAgentService (mock-first, real call scaffolded); 3 unit tests
 - [ ] 07-02-PLAN.md — Wave 2: Implement Phase 7 in IngestionProcessor (enrichment + scoring loop + terminal status); wire ScoringModule; 5 integration tests
 
 ## Progress
@@ -180,7 +180,7 @@ Plans:
 | 4. AI Extraction | 3/3 | Complete   | 2026-03-22 |
 | 5. File Storage | 3/3 | Complete   | 2026-03-22 |
 | 6. Duplicate Detection | 3/3 | Complete   | 2026-03-23 |
-| 7. Candidate Storage & Scoring | 0/2 | Not started | — |
+| 7. Candidate Storage & Scoring | 1/2 | In Progress|  |
 
 ---
 
