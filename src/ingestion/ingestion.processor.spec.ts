@@ -275,3 +275,14 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
     expect(storageService.upload).toHaveBeenCalled();
   });
 });
+
+describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
+  // CAND-03: email_intake_log.candidate_id is set after Phase 6 candidate creation
+  it.todo('6-02-01: CAND-03 — email_intake_log.candidate_id set to new candidateId after no-match INSERT');
+
+  // Integration: exact email match triggers UPSERT (candidateId = existing candidate)
+  it.todo('6-02-02: exact email match — DedupService called, existing candidateId set on intake log');
+
+  // Integration: fuzzy match triggers INSERT + createFlag, candidateId set on intake log
+  it.todo('6-02-03: fuzzy match — new candidate inserted, duplicate_flags created, candidateId set on intake log');
+});
