@@ -18,7 +18,11 @@ export interface ProcessingContext {
   candidateId: string; // Phase 6 output — set immediately after INSERT/UPSERT; consumed by Phase 7
 }
 
-@Processor('ingest-email')
+@Processor('ingest-email', {
+  lockDuration: 30000,    // 30s lock per job (Issue Fix 1: prevents timeout on long-running scoring loops)
+  lockRenewTime: 5000,    // renew lock every 5s
+  maxStalledCount: 2,     // retry if stalled 2x
+})
 export class IngestionProcessor extends WorkerHost {
   private readonly logger = new Logger(IngestionProcessor.name);
 
