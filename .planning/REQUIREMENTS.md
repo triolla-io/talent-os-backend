@@ -46,16 +46,16 @@
 
 ### Candidate Storage
 
-- [ ] **CAND-01**: `candidates` table stores AI-extracted fields plus `cv_text`, `cv_file_url`, `source`, `source_email`, `source_agency`, `metadata` JSONB
-- [ ] **CAND-02**: `candidates` table has UNIQUE index on `(tenant_id, email) WHERE email IS NOT NULL`
-- [ ] **CAND-03**: `email_intake_log.candidate_id` is set after successful candidate creation
+- [x] **CAND-01**: `candidates` table stores AI-extracted fields plus `cv_text`, `cv_file_url`, `source`, `source_email`, `source_agency`, `metadata` JSONB
+- [x] **CAND-02**: `candidates` table has UNIQUE index on `(tenant_id, email) WHERE email IS NOT NULL`
+- [x] **CAND-03**: `email_intake_log.candidate_id` is set after successful candidate creation
 
 ### AI Scoring
 
-- [ ] **SCOR-01**: Scoring processor fetches all active jobs for the tenant from `jobs` table (`WHERE status = 'active'`)
-- [ ] **SCOR-02**: Scoring processor upserts an `applications` row (`stage = 'new'`) for each candidate-job pair before scoring — idempotent on retry
+- [x] **SCOR-01**: Scoring processor fetches all active jobs for the tenant from `jobs` table (`WHERE status = 'active'`)
+- [x] **SCOR-02**: Scoring processor upserts an `applications` row (`stage = 'new'`) for each candidate-job pair before scoring — idempotent on retry
 - [x] **SCOR-03**: Agent 2 (claude-sonnet-4-6) scores candidate against each active job and returns: `score` (0–100), `reasoning`, `strengths[]`, `gaps[]`
-- [ ] **SCOR-04**: Score result is inserted append-only into `candidate_job_scores` — existing scores are never updated
+- [x] **SCOR-04**: Score result is inserted append-only into `candidate_job_scores` — existing scores are never updated
 - [x] **SCOR-05**: `candidate_job_scores` records the `model_used` string (e.g., `claude-sonnet-4-6`)
 
 ### Database Schema
@@ -142,13 +142,13 @@
 | DEDUP-04 | Phase 6 | Complete |
 | DEDUP-05 | Phase 6 | Complete |
 | DEDUP-06 | Phase 6 | Complete |
-| CAND-01 | Phase 7 | Pending |
-| CAND-02 | Phase 7 | Pending |
-| CAND-03 | Phase 7 | Pending |
-| SCOR-01 | Phase 7 | Pending |
-| SCOR-02 | Phase 7 | Pending |
+| CAND-01 | Phase 7 | Complete |
+| CAND-02 | Phase 7 | Complete |
+| CAND-03 | Phase 7 | Complete |
+| SCOR-01 | Phase 7 | Complete |
+| SCOR-02 | Phase 7 | Complete |
 | SCOR-03 | Phase 7 | Complete |
-| SCOR-04 | Phase 7 | Pending |
+| SCOR-04 | Phase 7 | Complete |
 | SCOR-05 | Phase 7 | Complete |
 | DB-01 | Phase 1 | Complete |
 | DB-02 | Phase 1 | Complete |
