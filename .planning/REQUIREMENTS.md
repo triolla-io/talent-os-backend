@@ -16,7 +16,7 @@
 
 ### Processing Pipeline
 
-- [ ] **PROC-01**: API and Worker run as separate Docker containers — CPU-heavy processing cannot block webhook receipt
+- [x] **PROC-01**: API and Worker run as separate Docker containers — CPU-heavy processing cannot block webhook receipt
 - [x] **PROC-02**: Spam pre-filter discards emails with no attachment AND body < 100 chars before any LLM call
 - [x] **PROC-03**: Spam pre-filter discards emails with marketing keywords in subject (`unsubscribe`, `newsletter`, `promotion`, `deal`, `offer`) before any LLM call
 - [x] **PROC-04**: System extracts plain text from PDF attachments via `pdf-parse`
@@ -75,8 +75,8 @@
 - [x] **INFR-01**: `main.ts` bootstraps NestJS with `rawBody: true` for HMAC signature verification
 - [x] **INFR-02**: `worker.ts` bootstraps BullMQ worker with no HTTP layer
 - [x] **INFR-03**: Environment variables validated at startup via `@nestjs/config` + Zod — application fails fast on missing config
-- [ ] **INFR-04**: Docker Compose defines: `api`, `worker`, `postgres` (16-alpine), `redis` (7-alpine) services
-- [ ] **INFR-05**: `.env.example` documents all required environment variables: `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `POSTMARK_WEBHOOK_TOKEN`, `TENANT_ID`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NODE_ENV`
+- [x] **INFR-04**: Docker Compose defines: `api`, `worker`, `postgres` (16-alpine), `redis` (7-alpine) services
+- [x] **INFR-05**: `.env.example` documents all required environment variables: `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `POSTMARK_WEBHOOK_TOKEN`, `TENANT_ID`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NODE_ENV`
 
 ## v2 Requirements
 
@@ -124,7 +124,7 @@
 | WBHK-04 | Phase 2 | Complete |
 | WBHK-05 | Phase 2 | Complete |
 | WBHK-06 | Phase 2 | Complete |
-| PROC-01 | Phase 8 | Pending |
+| PROC-01 | Phase 8 | Complete |
 | PROC-02 | Phase 3 | Complete |
 | PROC-03 | Phase 3 | Complete |
 | PROC-04 | Phase 3 | Complete |
@@ -162,8 +162,8 @@
 | INFR-01 | Phase 1 | Complete |
 | INFR-02 | Phase 1 | Complete |
 | INFR-03 | Phase 1 | Complete |
-| INFR-04 | Phase 8 | Pending |
-| INFR-05 | Phase 8 | Pending |
+| INFR-04 | Phase 8 | Complete |
+| INFR-05 | Phase 8 | Complete |
 
 **Coverage:**
 - v1 requirements: 40 total
@@ -173,4 +173,4 @@
 ---
 
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after roadmap creation*
+*Last updated: 2026-03-23 after Phase 8 gap closure*

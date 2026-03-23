@@ -14,7 +14,7 @@
 - [x] **Phase 5: File Storage** - Original CV files uploaded to Cloudflare R2 (completed 2026-03-22)
 - [x] **Phase 6: Duplicate Detection** - pg_trgm fuzzy matching, duplicate flags for human review (completed 2026-03-23)
 - [x] **Phase 7: Candidate Storage & Scoring** - Store candidates, score against active jobs with Claude Sonnet (completed 2026-03-23)
-- [ ] **Phase 8: Phase 1 Verification** - Write VERIFICATION.md for Phase 1 foundation, close stale PROC-01/INFR-04/INFR-05 checkboxes
+- [x] **Phase 8: Phase 1 Verification** - Write VERIFICATION.md for Phase 1 foundation, close stale PROC-01/INFR-04/INFR-05 checkboxes (completed 2026-03-23)
 
 ## Phase Details
 
@@ -186,7 +186,7 @@ Plans:
 2. PROC-01, INFR-04, INFR-05 checkboxes marked `[x]` in REQUIREMENTS.md
 3. Traceability table updated: PROC-01, INFR-04, INFR-05 → Phase 8, Status: Complete
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 08-01-PLAN.md — Write 01-VERIFICATION.md (15 requirements) and tick PROC-01/INFR-04/INFR-05 checkboxes in REQUIREMENTS.md
@@ -202,7 +202,7 @@ Plans:
 | 5. File Storage | 3/3 | Complete   | 2026-03-22 |
 | 6. Duplicate Detection | 3/3 | Complete   | 2026-03-23 |
 | 7. Candidate Storage & Scoring | 2/2 | Complete   | 2026-03-23 |
-| 8. Phase 1 Verification | 0/1 | Pending | — |
+| 8. Phase 1 Verification | 0/1 | Complete    | 2026-03-23 |
 
 ---
 
