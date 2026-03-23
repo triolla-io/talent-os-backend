@@ -39,7 +39,7 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 
 ### Out of Scope
 
-- Recruiter-facing REST API — Phase 2, after pipeline is stable
+- ~~Recruiter-facing REST API — Phase 2~~ — *Delivered in Phase 9: GET /api/candidates, /api/jobs, /api/applications live*
 - Authentication (JWT / Clerk) — Phase 2, no human requests in Phase 1
 - UI integration — Phase 2
 - Outbound email / outreach agent — Phase 2
@@ -102,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after Phase 8 completion — Phase 1 gap closure*
+*Last updated: 2026-03-23 after Phase 9 completion — all 9 phases complete, v1.0 milestone done*
