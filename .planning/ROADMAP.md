@@ -199,12 +199,12 @@ Plans:
 
 **Requirements:** RAPI-01
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 09-01-PLAN.md — Wave 1: CandidatesModule (GET /candidates with q + filter params, ai_score, is_duplicate)
 - [x] 09-02-PLAN.md — Wave 1: JobsModule (GET /jobs with candidate_count) + ApplicationsModule (GET /applications with nested candidate)
-- [ ] 09-03-PLAN.md — Wave 2: Wire modules into AppModule, add CORS + global prefix to main.ts, human smoke test
+- [x] 09-03-PLAN.md — Wave 2: Wire modules into AppModule, add CORS + global prefix to main.ts, human smoke test
 
 ## Progress
 
@@ -218,7 +218,7 @@ Plans:
 | 6. Duplicate Detection | 3/3 | Complete   | 2026-03-23 |
 | 7. Candidate Storage & Scoring | 2/2 | Complete   | 2026-03-23 |
 | 8. Phase 1 Verification | 0/1 | Complete    | 2026-03-23 |
-| 9. Client-facing REST API | 2/3 | In Progress|  |
+| 9. Client-facing REST API | 3/3 | Complete   | 2026-03-23 |
 
 ---
 
