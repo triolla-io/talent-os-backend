@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CandidateExtract } from '../ingestion/services/extraction-agent.service';
 
@@ -19,34 +20,95 @@ export class DedupService {
   constructor(private readonly prisma: PrismaService) {}
 
   async check(
-    _candidate: CandidateExtract,
-    _tenantId: string,
+    candidate: CandidateExtract,
+    tenantId: string,
   ): Promise<DedupResult | null> {
-    // Phase 6 Plan 01 — implementation pending
-    throw new Error('DedupService.check() not yet implemented');
+    // Step 1: Exact email match — skip if email is null (NULL = NULL is always false in SQL)
+    if (candidate.email) {
+      const exact = await this.prisma.candidate.findFirst({
+        where: { tenantId, email: candidate.email },
+        select: { id: true },
+      });
+      if (exact) {
+        return { match: { id: exact.id }, confidence: 1.0, fields: ['email'] };
+      }
+    }
+
+    // Step 2: Fuzzy name match via pg_trgm — runs entirely in PostgreSQL (DEDUP-01)
+    const fuzzy = await this.prisma.$queryRaw<FuzzyMatch[]>`
+      SELECT id::text, full_name,
+             similarity(full_name, ${candidate.fullName}) AS name_sim
+      FROM candidates
+      WHERE tenant_id = ${tenantId}::uuid
+        AND full_name % ${candidate.fullName}
+      ORDER BY name_sim DESC
+      LIMIT 1
+    `;
+
+    if (fuzzy.length > 0 && fuzzy[0].name_sim > 0.7) {
+      return {
+        match: { id: fuzzy[0].id },
+        confidence: fuzzy[0].name_sim,
+        fields: ['name'],
+      };
+    }
+
+    return null;
   }
 
   async insertCandidate(
-    _candidate: CandidateExtract,
-    _tenantId: string,
-    _fromEmail: string,
+    candidate: CandidateExtract,
+    tenantId: string,
+    fromEmail: string,
   ): Promise<string> {
-    throw new Error('DedupService.insertCandidate() not yet implemented');
+    const created = await this.prisma.candidate.create({
+      data: {
+        tenantId,
+        fullName: candidate.fullName,
+        email: candidate.email ?? null,
+        phone: candidate.phone ?? null,
+        source: candidate.source ?? 'direct',
+        sourceEmail: fromEmail,
+        // Phase 7 enriches: currentRole, yearsExperience, skills, cvText, cvFileUrl, aiSummary, metadata
+      },
+      select: { id: true },
+    });
+    return created.id;
   }
 
   async upsertCandidate(
-    _candidateId: string,
-    _candidate: CandidateExtract,
+    candidateId: string,
+    candidate: CandidateExtract,
   ): Promise<void> {
-    throw new Error('DedupService.upsertCandidate() not yet implemented');
+    await this.prisma.candidate.update({
+      where: { id: candidateId },
+      data: {
+        fullName: candidate.fullName,
+        phone: candidate.phone ?? null,
+        // source and sourceEmail intentionally NOT updated — first-submission wins (D-07)
+      },
+    });
   }
 
   async createFlag(
-    _candidateId: string,
-    _matchedCandidateId: string,
-    _confidence: number,
-    _tenantId: string,
+    candidateId: string,
+    matchedCandidateId: string,
+    confidence: number,
+    tenantId: string,
   ): Promise<void> {
-    throw new Error('DedupService.createFlag() not yet implemented');
+    await this.prisma.duplicateFlag.upsert({
+      where: {
+        idx_duplicates_pair: { tenantId, candidateId, matchedCandidateId },
+      },
+      create: {
+        tenantId,
+        candidateId,
+        matchedCandidateId,
+        confidence: new Prisma.Decimal(confidence.toString()),
+        matchFields: ['name'],
+        reviewed: false,
+      },
+      update: {}, // No-op on BullMQ retry — idempotent (D-13)
+    });
   }
 }
