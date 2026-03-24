@@ -41,6 +41,19 @@ describe('WebhooksService', () => {
     );
   });
 
+  describe('skips Postmark test payloads (Ping)', () => {
+    it('returns { status: "queued" } without DB or queue activity for MessageID 0-0-0-0-0', async () => {
+      const testPayload = { ...basePayload, MessageID: '00000000-0000-0000-0000-000000000000' };
+
+      const result = await service.enqueue(testPayload);
+
+      expect(result).toEqual({ status: 'queued' });
+      expect(mockPrisma.emailIntakeLog.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.emailIntakeLog.create).not.toHaveBeenCalled();
+      expect(mockQueue.add).not.toHaveBeenCalled();
+    });
+  });
+
   describe('inserts intake_log before enqueue on first receipt', () => {
     it('calls prisma.create before queue.add', async () => {
       mockPrisma.emailIntakeLog.findUnique.mockResolvedValue(null);

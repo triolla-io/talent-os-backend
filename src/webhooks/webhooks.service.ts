@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -24,6 +18,13 @@ export class WebhooksService {
   async enqueue(payload: PostmarkPayloadDto): Promise<{ status: string }> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
     const messageId = payload.MessageID;
+
+    // Step 0: Identify and skip Postmark test payloads (Ping)
+    // Postmark "Test" button sends this specific MessageID
+    if (messageId === '00000000-0000-0000-0000-000000000000') {
+      this.logger.log('Skipping Postmark test payload (Ping)');
+      return { status: 'queued' };
+    }
 
     // Step 1: Check for existing intake log row (idempotency per D-02)
     const existing = await this.prisma.emailIntakeLog.findUnique({
@@ -120,9 +121,7 @@ export class WebhooksService {
     return { status: overallStatus, db: dbStatus, redis: redisStatus };
   }
 
-  private stripAttachmentBlobs(
-    payload: PostmarkPayloadDto,
-  ): Omit<PostmarkPayloadDto, 'Attachments'> & {
+  private stripAttachmentBlobs(payload: PostmarkPayloadDto): Omit<PostmarkPayloadDto, 'Attachments'> & {
     Attachments: Omit<NonNullable<PostmarkPayloadDto['Attachments']>[number], 'Content'>[];
   } {
     return {
