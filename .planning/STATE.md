@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: Milestone complete
 last_updated: "2026-03-24T07:34:49.672Z"
-last_activity: "2026-03-24 - Completed quick task 260324-cbs: Commit unstaged changes into 4 atomic commits"
+last_activity: "2026-03-24 - Completed quick task 260324-dvq: Fix hiringStages guard in 10-02-PLAN.md"
 progress:
   total_phases: 10
   completed_phases: 9
@@ -83,6 +83,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 | 260324-agv | Replace Mock AI Extraction with OpenRouter MVP | 2026-03-24 | 1d93b1b | [260324-agv-replace-mock-ai-extraction-with-openrout](./quick/260324-agv-replace-mock-ai-extraction-with-openrout/) |
 | 260324-c3g | Clean up ExtractionAgentService: remove ENABLE_AI_EXTRACTION flag, isolate callAI(), add 2 seed candidates | 2026-03-24 | 80645f8 | [260324-c3g-clean-up-extraction-agent-service-ts-for](./quick/260324-c3g-clean-up-extraction-agent-service-ts-for/) |
 | 260324-cbs | Commit unstaged changes: @openrouter/sdk swap, CandidateExtract snake_case field rename, Zod v4 fix, PROTOCOL.md | 2026-03-24 | a5c32c7 | [260324-cbs-commit-all-unsaved-changes-into-atomic-c](./quick/260324-cbs-commit-all-unsaved-changes-into-atomic-c/) |
+| 260324-dvq | Fix hiringStages guard in 10-02-PLAN.md: empty array [] now falls through to default seeding | 2026-03-24 | bc1cc8a | [260324-dvq-fix-seeding-loophole-in-plan-10-02-hirin](./quick/260324-dvq-fix-seeding-loophole-in-plan-10-02-hirin/) |
 
 ### Todos
 
