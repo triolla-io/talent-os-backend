@@ -9,7 +9,7 @@ export const PostmarkAttachmentSchema = z.object({
 
 export const PostmarkPayloadSchema = z.object({
   MessageID: z.string().min(1),
-  From: z.string().email(),
+  From: z.email(),
   Subject: z.string().default(''),
   TextBody: z.string().optional(),
   HtmlBody: z.string().optional(),
