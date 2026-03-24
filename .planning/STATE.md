@@ -81,6 +81,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 | 260323-mai | Validate uncommitted changes; fix ngrok token parsing bug (cut -f2-); 4 atomic commits | 2026-03-23 | 8b4a1fc | [260323-mai-validate-uncommitted-changes-find-potent](./quick/260323-mai-validate-uncommitted-changes-find-potent/) |
 | 260324-agv | Replace Mock AI Extraction with OpenRouter MVP | 2026-03-24 | 1d93b1b | [260324-agv-replace-mock-ai-extraction-with-openrout](./quick/260324-agv-replace-mock-ai-extraction-with-openrout/) |
 | 260324-c3g | Clean up ExtractionAgentService: remove ENABLE_AI_EXTRACTION flag, isolate callAI(), add 2 seed candidates | 2026-03-24 | 80645f8 | [260324-c3g-clean-up-extraction-agent-service-ts-for](./quick/260324-c3g-clean-up-extraction-agent-service-ts-for/) |
+| 260324-cbs | Commit unstaged changes: @openrouter/sdk swap, CandidateExtract snake_case field rename, Zod v4 fix, PROTOCOL.md | 2026-03-24 | a5c32c7 | [260324-cbs-commit-all-unsaved-changes-into-atomic-c](./quick/260324-cbs-commit-all-unsaved-changes-into-atomic-c/) |
 
 ### Todos
 
@@ -88,8 +89,8 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 
 ## Session Continuity
 
-**Last Session:** 2026-03-23T17:18:07.186Z
-Last activity: 2026-03-24 - Completed quick task 260324-c3g: Clean up ExtractionAgentService, add seed candidates
+**Last Session:** 2026-03-24T07:00:00Z
+Last activity: 2026-03-24 - Completed quick task 260324-cbs: Commit unstaged changes into 4 atomic commits
 
 **What Happened:**
 
