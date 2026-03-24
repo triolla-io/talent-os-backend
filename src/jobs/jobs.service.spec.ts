@@ -32,6 +32,16 @@ describe('JobsService', () => {
     mockConfigService.get.mockReturnValue(TENANT_ID);
   });
 
+  describe('createJob()', () => {
+    it.todo('D-04: auto-seeds 4 default stages when hiringStages is omitted');
+    it.todo('D-04: default stages are Application Review, Screening, Interview, Offer in order');
+    it.todo('D-05: auto-seeded stages have isCustom=false');
+    it.todo('D-07: uses provided hiringStages when supplied in dto');
+    it.todo('D-06: creates screeningQuestions from dto.screeningQuestions');
+    it.todo('D-06: assigns tenantId from ConfigService to all nested creates');
+    it.todo('D-09: responsibleUserId on JobStage is free text string, not UUID-validated');
+  });
+
   describe('findAll', () => {
     it('Test 1: returns { jobs[], total } shape with mapped snake_case fields', async () => {
       mockPrismaService.job.findMany.mockResolvedValue([
