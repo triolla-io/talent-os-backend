@@ -15,22 +15,6 @@ async function main() {
     },
   });
   console.log('Upserted tenant:', tenant.id);
-
-  // Upsert 1 active job for the dev tenant
-  const job = await prisma.job.upsert({
-    where: {
-      id: '00000000-0000-0000-0000-000000000002',
-    },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000002',
-      tenantId: '00000000-0000-0000-0000-000000000001',
-      title: 'Software Engineer',
-      jobType: 'full_time',
-      status: 'active',
-    },
-  });
-  console.log('Upserted job:', job.id);
 }
 
 main()
