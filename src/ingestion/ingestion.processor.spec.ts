@@ -6,7 +6,7 @@ import { AttachmentExtractorService } from './services/attachment-extractor.serv
 import { PrismaService } from '../prisma/prisma.service';
 import { mockPostmarkPayload } from './services/spam-filter.service.spec';
 import { ExtractionAgentService } from './services/extraction-agent.service';
-import { mockCandidateExtract } from './services/extraction-agent.service.spec';
+import { mockCandidateExtract } from './services/extraction-agent.service.test-helpers';
 import { StorageService } from '../storage/storage.service';
 import { DedupService } from '../dedup/dedup.service';
 import { ScoringAgentService } from '../scoring/scoring.service';

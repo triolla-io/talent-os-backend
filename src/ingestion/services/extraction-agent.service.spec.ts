@@ -1,5 +1,9 @@
-import { ExtractionAgentService, CandidateExtract, CandidateExtractSchema } from './extraction-agent.service';
+import { ExtractionAgentService, CandidateExtractSchema } from './extraction-agent.service';
+import { mockCandidateExtract } from './extraction-agent.service.test-helpers';
 import { ConfigService } from '@nestjs/config';
+
+// Re-export for backward compatibility with other specs that import from here
+export { mockCandidateExtract };
 
 // Mock the 'ai' module's generateObject so tests don't hit real network
 jest.mock('ai', () => ({
@@ -9,23 +13,6 @@ jest.mock('ai', () => ({
 import { generateObject } from 'ai';
 
 const mockGenerateObject = generateObject as jest.MockedFunction<typeof generateObject>;
-
-export function mockCandidateExtract(
-  overrides: Partial<CandidateExtract> = {},
-): CandidateExtract {
-  return {
-    fullName: 'Jane Doe',
-    email: 'jane.doe@example.com',
-    phone: '+1-555-0100',
-    currentRole: 'Senior Software Engineer',
-    yearsExperience: 7,
-    skills: ['TypeScript', 'Node.js', 'PostgreSQL'],
-    summary: 'Experienced engineer with 7 years building TypeScript backends. Strong in distributed systems and database design.',
-    source: 'direct',
-    suspicious: false,
-    ...overrides,
-  };
-}
 
 function makeService(): ExtractionAgentService {
   const configService = {
