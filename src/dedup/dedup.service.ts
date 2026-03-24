@@ -36,18 +36,18 @@ export class DedupService {
 
     // Step 2: Fuzzy name match via pg_trgm — runs entirely in PostgreSQL (DEDUP-01)
     // Compute reversed token order to catch "Smith John" matching stored "John Smith" (DEDUP-06)
-    const reversedName = candidate.fullName.trim().split(/\s+/).reverse().join(' ');
+    const reversedName = candidate.full_name.trim().split(/\s+/).reverse().join(' ');
 
     const fuzzy = await this.prisma.$queryRaw<FuzzyMatch[]>`
       SELECT id::text, full_name,
              GREATEST(
-               similarity(full_name, ${candidate.fullName}),
+               similarity(full_name, ${candidate.full_name}),
                similarity(full_name, ${reversedName})
              ) AS name_sim
       FROM candidates
       WHERE tenant_id = ${tenantId}::uuid
         AND (
-          similarity(full_name, ${candidate.fullName}) > 0.7
+          similarity(full_name, ${candidate.full_name}) > 0.7
           OR similarity(full_name, ${reversedName}) > 0.7
         )
       ORDER BY name_sim DESC
@@ -75,10 +75,10 @@ export class DedupService {
     const created = await client.candidate.create({
       data: {
         tenantId,
-        fullName: candidate.fullName,
+        fullName: candidate.full_name,
         email: candidate.email ?? null,
         phone: candidate.phone ?? null,
-        source: candidate.source ?? 'direct',
+        source: 'direct',
         sourceEmail: fromEmail,
         // Phase 7 enriches: currentRole, yearsExperience, skills, cvText, cvFileUrl, aiSummary, metadata
       },
@@ -96,7 +96,7 @@ export class DedupService {
     await client.candidate.update({
       where: { id: candidateId },
       data: {
-        fullName: candidate.fullName,
+        fullName: candidate.full_name,
         phone: candidate.phone ?? null,
         // source and sourceEmail intentionally NOT updated — first-submission wins (D-07)
       },

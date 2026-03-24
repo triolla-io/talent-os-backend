@@ -12,6 +12,9 @@ import { DedupService } from '../dedup/dedup.service';
 import { ScoringAgentService } from '../scoring/scoring.service';
 import { Prisma } from '@prisma/client';
 
+// Mock @openrouter/sdk to prevent ESM parse errors (ExtractionAgentService is provided as a mock anyway)
+jest.mock('@openrouter/sdk', () => ({ OpenRouter: jest.fn() }));
+
 // Mock pdf-parse and mammoth so AttachmentExtractorService doesn't crash on fake content
 jest.mock('pdf-parse', () => jest.fn().mockResolvedValue({ text: 'pdf text' }));
 jest.mock('mammoth', () => ({
@@ -166,7 +169,7 @@ describe('IngestionProcessor', () => {
   // 4-02-02: AIEX-02 — successful extraction does not update status to failed
   it('successful extraction does not update failed status', async () => {
     extractionAgent.extract.mockResolvedValueOnce(
-      mockCandidateExtract({ fullName: 'Jane Doe' }),
+      mockCandidateExtract({ full_name: 'Jane Doe' }),
     );
 
     const payload = mockPostmarkPayload({
@@ -352,14 +355,14 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
 
     extractionAgent = {
       extract: jest.fn().mockResolvedValue({
-        fullName: 'Jane Doe',
+        full_name: 'Jane Doe',
         email: 'jane.doe@example.com',
         phone: '+1-555-0100',
-        currentRole: 'Senior Software Engineer',
-        yearsExperience: 7,
+        
+        
         skills: ['TypeScript'],
-        summary: 'Experienced engineer.',
-        source: 'direct',
+        ai_summary: 'Experienced engineer.',
+        
         suspicious: false,
       }),
     };
@@ -521,14 +524,14 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
 
     extractionAgent = {
       extract: jest.fn().mockResolvedValue({
-        fullName: 'Jane Doe',
+        full_name: 'Jane Doe',
         email: 'jane.doe@example.com',
         phone: '+1-555-0100',
-        currentRole: 'Senior Software Engineer',
-        yearsExperience: 7,
+        
+        
         skills: ['TypeScript', 'Node.js'],
-        summary: 'Experienced engineer. Strong in distributed systems.',
-        source: 'direct',
+        ai_summary: 'Experienced engineer. Strong in distributed systems.',
+        
         suspicious: false,
       }),
     };
@@ -594,8 +597,8 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
       expect.objectContaining({
         where: { id: 'new-candidate-id' },
         data: expect.objectContaining({
-          currentRole: 'Senior Software Engineer',
-          yearsExperience: 7,
+          currentRole: null,
+          yearsExperience: null,
           skills: ['TypeScript', 'Node.js'],
           cvText: expect.any(String),
           cvFileUrl: expect.any(String),

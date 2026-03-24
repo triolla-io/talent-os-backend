@@ -7,14 +7,11 @@ export function mockCandidateDedupExtract(
   overrides: Partial<CandidateExtract> = {},
 ): CandidateExtract {
   return {
-    fullName: 'Jane Doe',
+    full_name: 'Jane Doe',
     email: 'jane.doe@example.com',
     phone: '+1-555-0100',
-    currentRole: 'Senior Software Engineer',
-    yearsExperience: 7,
     skills: ['TypeScript', 'Node.js'],
-    summary: 'Experienced engineer.',
-    source: 'direct',
+    ai_summary: 'Experienced engineer.',
     suspicious: false,
     ...overrides,
   };
@@ -145,7 +142,7 @@ describe('DedupService', () => {
       { id: 'fuzzy-789', full_name: 'John Smith', name_sim: 0.82 },
     ]);
     // Input name is inverted compared to stored name
-    const extract = mockCandidateDedupExtract({ fullName: 'Smith John', email: null });
+    const extract = mockCandidateDedupExtract({ full_name: 'Smith John', email: null });
 
     const result = await service.check(extract, 'tenant-abc');
 
@@ -159,7 +156,7 @@ describe('DedupService', () => {
     prisma.candidate.findFirst.mockResolvedValue(null); // no exact email match
     // SQL already filtered out low-similarity rows — returns empty array
     prisma.$queryRaw.mockResolvedValue([]);
-    const extract = mockCandidateDedupExtract({ fullName: 'Jane Doe', email: null });
+    const extract = mockCandidateDedupExtract({ full_name: 'Jane Doe', email: null });
 
     const result = await service.check(extract, 'tenant-abc');
 

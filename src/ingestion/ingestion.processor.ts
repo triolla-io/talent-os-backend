@@ -113,7 +113,7 @@ export class IngestionProcessor extends WorkerHost {
     }
 
     // D-04, D-05: empty fullName is treated the same as extraction failure (permanent — do not retry)
-    if (!extraction.fullName?.trim()) {
+    if (!extraction.full_name?.trim()) {
       await this.prisma.emailIntakeLog.update({
         where: {
           idx_intake_message_id: { tenantId, messageId: payload.MessageID },
@@ -124,7 +124,7 @@ export class IngestionProcessor extends WorkerHost {
       return;
     }
 
-    this.logger.log(`Phase 4 complete for MessageID: ${payload.MessageID} — extracted: ${extraction.fullName}`);
+    this.logger.log(`Phase 4 complete for MessageID: ${payload.MessageID} — extracted: ${extraction.full_name}`);
 
     // Phase 6: Duplicate detection + minimal candidate shell INSERT/UPSERT (atomic)
     // dedupService.check() runs OUTSIDE the transaction — read-only query, no benefit from holding lock
@@ -164,12 +164,12 @@ export class IngestionProcessor extends WorkerHost {
     await this.prisma.candidate.update({
       where: { id: context.candidateId },
       data: {
-        currentRole: extraction.currentRole ?? null,
-        yearsExperience: extraction.yearsExperience ?? null,
+        currentRole: null,
+        yearsExperience: null,
         skills: extraction.skills ?? [],
         cvText: context.cvText,
         cvFileUrl: context.fileKey, // R2 object key used as URL placeholder in Phase 1 (D-02)
-        aiSummary: extraction.summary ?? null,
+        aiSummary: extraction.ai_summary ?? null,
         metadata: Prisma.JsonNull,   // D-03: deferred to future phase (Prisma requires JsonNull not null)
       },
     });
@@ -204,8 +204,8 @@ export class IngestionProcessor extends WorkerHost {
         scoreResult = await this.scoringService.score({
           cvText: context.cvText,
           candidateFields: {
-            currentRole: extraction.currentRole ?? null,
-            yearsExperience: extraction.yearsExperience ?? null,
+            currentRole: null,
+            yearsExperience: null,
             skills: extraction.skills ?? [],
           },
           job: {
