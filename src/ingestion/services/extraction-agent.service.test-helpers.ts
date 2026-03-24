@@ -4,14 +4,11 @@ export function mockCandidateExtract(
   overrides: Partial<CandidateExtract> = {},
 ): CandidateExtract {
   return {
-    fullName: 'Jane Doe',
+    full_name: 'Jane Doe',
     email: 'jane.doe@example.com',
     phone: '+1-555-0100',
-    currentRole: 'Senior Software Engineer',
-    yearsExperience: 7,
     skills: ['TypeScript', 'Node.js', 'PostgreSQL'],
-    summary: 'Experienced engineer with 7 years building TypeScript backends. Strong in distributed systems and database design.',
-    source: 'direct',
+    ai_summary: 'Experienced engineer with 7 years building TypeScript backends. Strong in distributed systems and database design.',
     suspicious: false,
     ...overrides,
   };
