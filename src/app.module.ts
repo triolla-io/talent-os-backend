@@ -7,6 +7,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { CandidatesModule } from './candidates/candidates.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ApplicationsModule } from './applications/applications.module';
+import { AppConfigModule } from './config/app-config/app-config.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ApplicationsModule } from './applications/applications.module';
     CandidatesModule,
     JobsModule,
     ApplicationsModule,
+    AppConfigModule,
   ],
 })
 export class AppModule {}
