@@ -1,10 +1,12 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { JobsController } from './jobs.controller';
 
 describe('JobsController', () => {
   const mockJobsService = {
     findAll: jest.fn(),
     createJob: jest.fn(),
+    updateJob: jest.fn(),
+    deleteJob: jest.fn(),
   };
 
   let controller: JobsController;
@@ -14,39 +16,128 @@ describe('JobsController', () => {
     controller = new JobsController(mockJobsService as any);
   });
 
+  describe('GET /jobs', () => {
+    it('calls jobsService.findAll and returns result', async () => {
+      const mockResult = { jobs: [], total: 0 };
+      mockJobsService.findAll.mockResolvedValue(mockResult);
+      const result = await controller.findAll();
+      expect(mockJobsService.findAll).toHaveBeenCalledTimes(1);
+      expect(result).toBe(mockResult);
+    });
+  });
+
   describe('POST /jobs', () => {
-    it('D-06: calls jobsService.createJob with validated dto', async () => {
+    it('calls jobsService.createJob with validated dto', async () => {
       mockJobsService.createJob.mockResolvedValue({ id: 'job-1', title: 'Software Engineer' });
-      await controller.create({ title: 'Software Engineer' });
+      const payload = {
+        title: 'Software Engineer',
+        job_type: 'full_time',
+        status: 'draft',
+        hiring_flow: [{ name: 'Stage 1', order: 1, color: 'bg-zinc-400', is_enabled: true, is_custom: false }],
+      };
+      await controller.create(payload);
       expect(mockJobsService.createJob).toHaveBeenCalledTimes(1);
       expect(mockJobsService.createJob).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Software Engineer' }),
+        expect.objectContaining({ title: 'Software Engineer', job_type: 'full_time' }),
       );
     });
 
-    it('D-08: returns 400 when title is missing', async () => {
-      await expect(controller.create({})).rejects.toThrow(BadRequestException);
+    it('returns 400 VALIDATION_ERROR when title is missing', async () => {
       try {
         await controller.create({});
+        fail('should have thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(BadRequestException);
-        expect((err as BadRequestException).message).toContain('Validation failed');
+        const response = (err as BadRequestException).getResponse() as any;
+        expect(response.error.code).toBe('VALIDATION_ERROR');
+        expect(response.error.message).toBe('Validation failed');
+        expect(response.error.details).toHaveProperty('title');
       }
     });
 
-    it('D-08: returns 400 when answerType is invalid enum value', async () => {
+    it('returns 400 when screening question type is invalid', async () => {
       await expect(
         controller.create({
           title: 'Eng',
-          screeningQuestions: [{ text: 'Q?', answerType: 'invalid_type' }],
+          hiring_flow: [{ name: 'S1', order: 1, color: 'bg-zinc-400', is_enabled: true, is_custom: false }],
+          screening_questions: [{ text: 'Q?', type: 'invalid_type' }],
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('D-08: returns 201 with created job on valid payload', async () => {
+    it('returns 400 VALIDATION_ERROR when all hiring stages are disabled', async () => {
+      try {
+        await controller.create({
+          title: 'Eng',
+          job_type: 'full_time',
+          status: 'draft',
+          hiring_flow: [{ name: 'S1', order: 1, color: 'bg-zinc-400', is_enabled: false, is_custom: false }],
+        });
+        fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(BadRequestException);
+      }
+    });
+
+    it('returns result on valid payload', async () => {
       mockJobsService.createJob.mockResolvedValue({ id: 'job-1', title: 'Eng' });
       const result = await controller.create({ title: 'Eng' });
       expect(result).toEqual({ id: 'job-1', title: 'Eng' });
+    });
+  });
+
+  describe('PUT /jobs/:id', () => {
+    it('calls jobsService.updateJob with id and validated dto', async () => {
+      mockJobsService.updateJob.mockResolvedValue({ id: 'job-1', title: 'Updated' });
+      const payload = { title: 'Updated', job_type: 'full_time', status: 'draft' };
+      await controller.update('job-1', payload);
+      expect(mockJobsService.updateJob).toHaveBeenCalledWith('job-1', expect.objectContaining({ title: 'Updated' }));
+    });
+
+    it('returns 400 VALIDATION_ERROR when validation fails', async () => {
+      await expect(controller.update('job-1', {})).rejects.toThrow(BadRequestException);
+    });
+
+    it('returns 404 NOT_FOUND when job not found (NotFoundException)', async () => {
+      mockJobsService.updateJob.mockRejectedValue(new NotFoundException());
+      try {
+        await controller.update('nonexistent', { title: 'T', job_type: 'full_time', status: 'draft' });
+        fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(NotFoundException);
+        const response = (err as NotFoundException).getResponse() as any;
+        expect(response.error.code).toBe('NOT_FOUND');
+      }
+    });
+
+    it('returns 404 NOT_FOUND when Prisma throws P2025', async () => {
+      mockJobsService.updateJob.mockRejectedValue({ code: 'P2025' });
+      try {
+        await controller.update('nonexistent', { title: 'T', job_type: 'full_time', status: 'draft' });
+        fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(NotFoundException);
+      }
+    });
+  });
+
+  describe('DELETE /jobs/:id', () => {
+    it('calls jobsService.deleteJob with id', async () => {
+      mockJobsService.deleteJob.mockResolvedValue(undefined);
+      await controller.delete('job-1');
+      expect(mockJobsService.deleteJob).toHaveBeenCalledWith('job-1');
+    });
+
+    it('returns 404 NOT_FOUND when job not found', async () => {
+      mockJobsService.deleteJob.mockRejectedValue(new NotFoundException());
+      try {
+        await controller.delete('nonexistent');
+        fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(NotFoundException);
+        const response = (err as NotFoundException).getResponse() as any;
+        expect(response.error.code).toBe('NOT_FOUND');
+      }
     });
   });
 });

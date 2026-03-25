@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  BadRequestException,
+  NotFoundException,
+  HttpCode,
+} from '@nestjs/common';
 import { JobsService } from './jobs.service';
 import { CreateJobSchema } from './dto/create-job.dto';
 
@@ -16,10 +27,59 @@ export class JobsController {
     const result = CreateJobSchema.safeParse(body);
     if (!result.success) {
       throw new BadRequestException({
-        message: 'Validation failed',
-        errors: result.error.issues,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          details: result.error.flatten().fieldErrors,
+        },
       });
     }
     return this.jobsService.createJob(result.data);
+  }
+
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() body: unknown) {
+    const result = CreateJobSchema.safeParse(body);
+    if (!result.success) {
+      throw new BadRequestException({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          details: result.error.flatten().fieldErrors,
+        },
+      });
+    }
+    try {
+      return await this.jobsService.updateJob(id, result.data);
+    } catch (error: any) {
+      // Prisma P2025: record not found
+      if (error?.code === 'P2025' || error instanceof NotFoundException) {
+        throw new NotFoundException({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Job not found',
+          },
+        });
+      }
+      throw error;
+    }
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  async delete(@Param('id') id: string) {
+    try {
+      await this.jobsService.deleteJob(id);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        throw new NotFoundException({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Job not found',
+          },
+        });
+      }
+      throw error;
+    }
   }
 }
