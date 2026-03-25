@@ -233,6 +233,16 @@ Plans:
 - [x] 10-02-PLAN.md — Wave 2: Create src/jobs/dto/create-job.dto.ts (Zod schemas); implement JobsService.createJob() with default stage seeding; 7 unit tests green
 - [x] 10-03-PLAN.md — Wave 3: Add @Post() to JobsController with Zod validation; fill integration tests; human smoke test checkpoint
 
+### Phase 11: Review and validate API protocol MVP spec and implementation guide
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 10
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 11 to break down)
+
 ---
 
 *Roadmap created: 2026-03-22 by /gsd:new-roadmap*

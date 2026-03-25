@@ -60,6 +60,7 @@ Plan: Not started
 
 - Phase 9 added: Create client-facing REST API endpoints
 - Phase 10 added: Add job creation feature
+- Phase 11 added: Review and validate API protocol MVP spec and implementation guide
 
 ### Blockers
 
