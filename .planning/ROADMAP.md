@@ -1,7 +1,7 @@
 # Roadmap: Triolla Talent OS — Backend (Phase 1)
 
 **Created:** 2026-03-22
-**Phases:** 7
+**Phases:** 11
 **Granularity:** Standard
 **Coverage:** 40/40 v1 requirements mapped
 
@@ -15,6 +15,9 @@
 - [x] **Phase 6: Duplicate Detection** - pg_trgm fuzzy matching, duplicate flags for human review (completed 2026-03-23)
 - [x] **Phase 7: Candidate Storage & Scoring** - Store candidates, score against active jobs with Claude Sonnet (completed 2026-03-23)
 - [x] **Phase 8: Phase 1 Verification** - Write VERIFICATION.md for Phase 1 foundation, close stale PROC-01/INFR-04/INFR-05 checkboxes (completed 2026-03-23)
+- [x] **Phase 9: Create client-facing REST API endpoints** - GET /api/candidates, /jobs, /applications endpoints (completed 2026-03-23)
+- [x] **Phase 10: Add job creation feature** - POST /api/jobs with atomic nested creation and default seeding (completed 2026-03-24)
+- [ ] **Phase 11: API Protocol MVP Implementation** - Complete job management endpoints with full validation and testing
 
 ## Phase Details
 
@@ -189,7 +192,7 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 08-01-PLAN.md — Write 01-VERIFICATION.md (15 requirements) and tick PROC-01/INFR-04/INFR-05 checkboxes in REQUIREMENTS.md
+- [x] 08-01-PLAN.md — Write 01-VERIFICATION.md (15 requirements) and tick PROC-01/INFR-04/INFR-05 checkboxes in REQUIREMENTS.md
 
 ### Phase 9: Create client-facing REST API endpoints
 
@@ -206,25 +209,14 @@ Plans:
 - [x] 09-02-PLAN.md — Wave 1: JobsModule (GET /jobs with candidate_count) + ApplicationsModule (GET /applications with nested candidate)
 - [x] 09-03-PLAN.md — Wave 2: Wire modules into AppModule, add CORS + global prefix to main.ts, human smoke test
 
-## Progress
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Foundation | 3/3 | Complete | 2026-03-22 |
-| 2. Webhook Intake & Idempotency | 3/3 | Complete | 2026-03-22 |
-| 3. Processing Pipeline & Spam Filter | 4/4 | Complete   | 2026-03-22 |
-| 4. AI Extraction | 3/3 | Complete   | 2026-03-22 |
-| 5. File Storage | 3/3 | Complete   | 2026-03-22 |
-| 6. Duplicate Detection | 3/3 | Complete   | 2026-03-23 |
-| 7. Candidate Storage & Scoring | 2/2 | Complete   | 2026-03-23 |
-| 8. Phase 1 Verification | 0/1 | Complete    | 2026-03-23 |
-| 9. Client-facing REST API | 3/3 | Complete   | 2026-03-23 |
-
 ### Phase 10: Add job creation feature
 
 **Goal:** Add POST /api/jobs endpoint with atomic nested creation of JobStage and ScreeningQuestion records; auto-seed 4 default hiring stages per job; additive schema migration only (no field removals).
-**Requirements:** D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10
+
 **Depends on:** Phase 9
+
+**Requirements:** D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10
+
 **Plans:** 4/4 plans complete
 
 Plans:
@@ -233,16 +225,49 @@ Plans:
 - [x] 10-02-PLAN.md — Wave 2: Create src/jobs/dto/create-job.dto.ts (Zod schemas); implement JobsService.createJob() with default stage seeding; 7 unit tests green
 - [x] 10-03-PLAN.md — Wave 3: Add @Post() to JobsController with Zod validation; fill integration tests; human smoke test checkpoint
 
-### Phase 11: Review and validate API protocol MVP spec and implementation guide
+### Phase 11: API Protocol MVP Implementation
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Implement complete API protocol MVP specification: update database schema (JobStage interviewer/is_enabled, ScreeningQuestion expected_answer), complete all 5 job management endpoints (GET /config, GET /jobs, POST /jobs, PUT /jobs/:id, DELETE /jobs/:id), validation and error handling per spec, tenant isolation, and comprehensive integration tests.
+
 **Depends on:** Phase 10
-**Plans:** 0 plans
+
+**Requirements:** API_PROTOCOL_MVP_SCHEMA_UPDATES, API_PROTOCOL_MVP_ENDPOINTS, API_PROTOCOL_MVP_VALIDATION, API_PROTOCOL_MVP_TESTING
+
+**Success Criteria** (what must be TRUE):
+1. Prisma schema updated: JobStage has `interviewer` (TEXT, nullable) and `isEnabled` (BOOLEAN, default true); ScreeningQuestion has `expectedAnswer` (VARCHAR, nullable)
+2. GET /config returns hardcoded response with 6 lookup tables and 4 default hiring stages with correct Tailwind colors
+3. GET /jobs returns complete job data with nested hiring_flow and screening_questions, all fields matching API_PROTOCOL_MVP.md, snake_case field names
+4. POST /jobs creates jobs atomically, seeds 4 default stages if none provided, validates all required fields, rejects if all stages disabled
+5. PUT /jobs/:id updates job fields independently, atomically recreates stages/questions (omitted = removed), validates at least one stage enabled
+6. DELETE /jobs/:id soft-deletes (status=closed, no hard delete), returns 204 No Content
+7. All endpoints enforce tenant isolation via ConfigService TENANT_ID
+8. All error responses use standard format with code, message, details
+9. Screening question responses use `type` field (not `answerType`), hide `required`/`knockout` fields
+10. Hiring stage responses include computed `color` field (client-computed from stage order, not stored)
+11. Integration tests pass covering all endpoints, validation scenarios, tenant isolation, and response formats
+
+**Plans:** 1/1 plans in progress
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 11 to break down)
+- [ ] 11-01-PLAN.md — Schema migrations, Config endpoint, Jobs endpoints (GET/POST/PUT/DELETE), validation, error handling, integration tests, human smoke test checkpoint
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Foundation | 3/3 | Complete | 2026-03-22 |
+| 2. Webhook Intake & Idempotency | 3/3 | Complete | 2026-03-22 |
+| 3. Processing Pipeline & Spam Filter | 4/4 | Complete | 2026-03-22 |
+| 4. AI Extraction | 3/3 | Complete | 2026-03-22 |
+| 5. File Storage | 3/3 | Complete | 2026-03-22 |
+| 6. Duplicate Detection | 3/3 | Complete | 2026-03-23 |
+| 7. Candidate Storage & Scoring | 2/2 | Complete | 2026-03-23 |
+| 8. Phase 1 Verification | 1/1 | Complete | 2026-03-23 |
+| 9. Client-facing REST API | 3/3 | Complete | 2026-03-23 |
+| 10. Add job creation feature | 4/4 | Complete | 2026-03-24 |
+| 11. API Protocol MVP Implementation | 1/1 | In Progress | 2026-03-25 |
 
 ---
 
 *Roadmap created: 2026-03-22 by /gsd:new-roadmap*
+*Updated: 2026-03-25 by /gsd:plan-phase 11*
