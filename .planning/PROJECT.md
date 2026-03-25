@@ -84,6 +84,16 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 | Prisma over raw SQL / Drizzle | Schema as single source of truth, type-safe, clean migration tooling | — Pending |
 | Zod for all structured AI outputs | Type-safe AI responses; same schema used for validation and TypeScript types | — Pending |
 
+## Current State
+
+**Phase 11 Complete (2026-03-25):** API Protocol MVP Specification
+- Job management endpoints implemented: GET /config, GET /jobs, POST /jobs, PUT /jobs/:id, DELETE /jobs/:id
+- Database schema extended: JobStage (interviewer, is_enabled, color), ScreeningQuestion (expected_answer)
+- Atomic transactions + default 4-stage seeding for job creation
+- Tenant isolation on all endpoints via TENANT_ID config
+- 195 tests passing; all must-haves verified (Phase 2 UI can build on this contract)
+- Ready for Phase 2: Recruiter authentication, admin UI, candidate management
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
