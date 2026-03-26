@@ -50,6 +50,49 @@ Fetch candidates with optional search and filtering.
 }
 ```
 
+### `POST /candidates`
+
+Create a new candidate profile, optionally with a CV file upload.
+
+**Content-Type:** `multipart/form-data`
+
+**Form Fields:**
+- `cv_file` (optional): CV file (binary upload)
+- All other candidate fields as form data (mirroring the body fields below)
+
+**Request Body (JSON fields as form parts):**
+
+```json
+{
+  "full_name": "John Doe",
+  "email": "john@example.com",
+  "phone": "+1 555-0100",
+  "current_role": "Software Engineer",
+  "location": "Tel Aviv",
+  "years_experience": 5,
+  "skills": ["React", "TypeScript"],
+  "ai_summary": null,
+  "cv_file_url": null,
+  "source": "linkedin",
+  "source_agency": null,
+  "job_id": "uuid"
+}
+```
+
+**Notes:**
+- `full_name` and `source` are required
+- `email`, `phone`, `current_role`, `location`, `years_experience`, `ai_summary`, `cv_file_url`, `source_agency` are nullable
+- `job_id` is required — links the candidate to a specific job opening
+- `source` must be one of: `linkedin`, `website`, `agency`, `referral`, `direct`
+- `source_agency` is only relevant when `source = agency`
+- If `cv_file` is provided it is stored and `cv_file_url` is set on the created record
+
+**Response:** `201 Created` (returns full candidate object, same structure as GET /candidates item)
+
+**Errors:**
+- `400 Bad Request` — validation failed
+- `500 Internal Server Error` — server error
+
 ---
 
 ## 2. Jobs API
@@ -57,6 +100,9 @@ Fetch candidates with optional search and filtering.
 ### `GET /jobs`
 
 Fetch all job openings with hiring stages and screening questions.
+
+**Query Parameters:**
+- `status` (optional): Filter by job status — `draft`, `open`, or `closed`. If omitted, all statuses are returned.
 
 **Response:** `200 OK`
 
@@ -133,6 +179,7 @@ Create a new job opening.
   "selected_org_types": ["startup", "enterprise"],
   "hiring_flow": [
     {
+      "id": "temp-client-uuid",
       "name": "Application review",
       "order": 1,
       "color": "bg-zinc-400",
@@ -143,6 +190,7 @@ Create a new job opening.
   ],
   "screening_questions": [
     {
+      "id": "temp-client-uuid",
       "text": "Do you have React experience?",
       "type": "yes_no",
       "expected_answer": null,
@@ -154,7 +202,9 @@ Create a new job opening.
 
 **Notes:**
 - `title` is required
-- If `hiring_flow` is omitted or empty, 4 default stages are seeded automatically
+- `hiring_flow[].id` and `screening_questions[].id` are optional — used by the client to pass temp UUIDs; ignored by the server
+- If `hiring_flow` is omitted or empty, **8** default stages are seeded automatically:
+  `Application Review`, `Screening`, `Interview`, `Offer` (enabled) + `Hired`, `Rejected`, `Pending Decision`, `On Hold` (disabled)
 - All other fields are optional with sensible defaults
 - At least one hiring stage must be enabled (if provided)
 - Screening question `type` must be `yes_no` or `text`
@@ -193,6 +243,25 @@ Soft-delete a job (sets status to `closed`).
 **Errors:**
 - `404 Not Found` — job not found
 - `500 Internal Server Error` — server error
+
+### `GET /jobs/list`
+
+Fetch a lightweight list of open jobs (for dropdowns / job selectors).
+
+**Response:** `200 OK`
+
+```json
+{
+  "jobs": [
+    { "id": "uuid", "title": "Senior Frontend Developer", "department": "Engineering" }
+  ]
+}
+```
+
+**Notes:**
+- Returns only jobs with `status = open`
+- `department` may be `null` if not set on the job
+- Intended for use in dropdowns and candidate application forms
 
 ---
 
@@ -321,13 +390,14 @@ Fetch configuration options for UI dropdowns and templates.
     { "id": "text", "label": "Free Text" }
   ],
   "hiring_stages_template": [
-    {
-      "name": "Application review",
-      "is_enabled": true,
-      "color": "bg-zinc-400",
-      "is_custom": false,
-      "order": 1
-    }
+    { "name": "Application Review", "is_enabled": true,  "color": "bg-zinc-400",   "is_custom": false, "order": 1 },
+    { "name": "Screening",          "is_enabled": true,  "color": "bg-blue-500",   "is_custom": false, "order": 2 },
+    { "name": "Interview",          "is_enabled": true,  "color": "bg-indigo-400", "is_custom": false, "order": 3 },
+    { "name": "Offer",              "is_enabled": true,  "color": "bg-emerald-500","is_custom": false, "order": 4 },
+    { "name": "Hired",              "is_enabled": false, "color": "bg-green-600",  "is_custom": false, "order": 5 },
+    { "name": "Rejected",           "is_enabled": false, "color": "bg-red-500",    "is_custom": false, "order": 6 },
+    { "name": "Pending Decision",   "is_enabled": false, "color": "bg-yellow-400", "is_custom": false, "order": 7 },
+    { "name": "On Hold",            "is_enabled": false, "color": "bg-gray-500",   "is_custom": false, "order": 8 }
   ]
 }
 ```
