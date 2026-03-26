@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Milestone complete
-last_updated: "2026-03-25T08:18:25.735Z"
-last_activity: 2026-03-25
+last_updated: "2026-03-26T13:14:46.833Z"
+last_activity: 2026-03-26
 progress:
-  total_phases: 11
+  total_phases: 12
   completed_phases: 11
   total_plans: 30
   completed_plans: 30
@@ -63,6 +63,7 @@ Plan: Not started
 - Phase 9 added: Create client-facing REST API endpoints
 - Phase 10 added: Add job creation feature
 - Phase 11 added: Review and validate API protocol MVP spec and implementation guide
+- Phase 12 added: Support add candidate from the UI (not from the webhook). Full spec in spec/backend-spec-add-candidate.md. Research and align with client needs before planning.
 
 ### Blockers
 
@@ -95,7 +96,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 
 ## Session Continuity
 
-**Last Session:** 2026-03-26T10:00:00.000Z
+**Last Session:** 2026-03-26T13:14:46.828Z
 Last activity: 2026-03-26
 
 **What Happened (Phase 11 Final):**
