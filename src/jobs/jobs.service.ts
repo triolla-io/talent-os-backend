@@ -29,7 +29,7 @@ export class JobsService {
       include: {
         hiringStages: { orderBy: { order: 'asc' } },
         screeningQuestions: { orderBy: { order: 'asc' } },
-        _count: { select: { applications: true } },
+        _count: { select: { candidates: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -90,7 +90,7 @@ export class JobsService {
         include: {
           hiringStages: { orderBy: { order: 'asc' } },
           screeningQuestions: { orderBy: { order: 'asc' } },
-          _count: { select: { applications: true } },
+          _count: { select: { candidates: true } },
         },
       });
 
@@ -101,7 +101,6 @@ export class JobsService {
   async updateJob(id: string, dto: CreateJobDto): Promise<any> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
 
-    // Verify job exists for this tenant (throws Prisma P2025 if not)
     await this.prisma.job.findFirstOrThrow({
       where: { id, tenantId },
     });
@@ -158,7 +157,7 @@ export class JobsService {
         include: {
           hiringStages: { orderBy: { order: 'asc' } },
           screeningQuestions: { orderBy: { order: 'asc' } },
-          _count: { select: { applications: true } },
+          _count: { select: { candidates: true } },
         },
       });
 
@@ -221,7 +220,7 @@ export class JobsService {
       job_type: job.jobType,
       status: job.status,
       hiring_manager: job.hiringManager,
-      candidate_count: job._count?.applications ?? 0,
+      candidate_count: job._count?.candidates ?? 0,
       created_at: job.createdAt,
       updated_at: job.updatedAt,
       description: job.description,

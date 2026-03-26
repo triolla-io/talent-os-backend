@@ -134,10 +134,11 @@ export class CandidatesService {
   ): Promise<Record<string, unknown>> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
 
-    // Pre-validation 1: validate job exists in tenant
+    // Pre-validation 1: validate job exists in the same tenant
     const job = await this.prisma.job.findFirst({
       where: { id: dto.job_id, tenantId },
     });
+
     if (!job) {
       throw new NotFoundException({
         error: { code: 'NOT_FOUND', message: 'Job not found' },
@@ -184,6 +185,7 @@ export class CandidatesService {
         data: {
           id: candidateId,
           tenantId,
+          jobId: dto.job_id,
           fullName: dto.full_name,
           email: dto.email ?? null,
           phone: dto.phone ?? null,
@@ -218,6 +220,7 @@ export class CandidatesService {
     return {
       id: candidate.id,
       tenant_id: candidate.tenantId,
+      job_id: candidate.jobId,
       full_name: candidate.fullName,
       email: candidate.email,
       phone: candidate.phone,
