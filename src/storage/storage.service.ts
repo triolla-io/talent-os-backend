@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { PostmarkAttachmentDto } from '../webhooks/dto/postmark-payload.dto';
@@ -58,6 +58,45 @@ export class StorageService {
     return key;
   }
 
+  // Upload from a raw buffer (used for UI-uploaded files)
+  // D-02: cv_text stays null; returns R2 object key only (not presigned URL)
+  async uploadFromBuffer(
+    buffer: Buffer,
+    mimetype: string,
+    tenantId: string,
+    candidateId: string,
+  ): Promise<string> {
+    const ALLOWED_MIME_TYPES = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+
+    if (!ALLOWED_MIME_TYPES.includes(mimetype)) {
+      throw new BadRequestException({
+        error: {
+          code: 'INVALID_FILE_TYPE',
+          message: `Invalid file type: ${mimetype}. Only PDF and Word documents are accepted.`,
+        },
+      });
+    }
+
+    const extension = this.getExtension(mimetype);
+    const key = `cvs/${tenantId}/${candidateId}${extension}`;
+
+    const command = new PutObjectCommand({
+      Bucket: this.config.get<string>('R2_BUCKET_NAME')!,
+      Key: key,
+      Body: buffer,
+      ContentType: mimetype,
+    });
+
+    await this.s3Client.send(command);
+
+    this.logger.log(`Uploaded ${key} to R2 (${buffer.length} bytes)`);
+    return key;
+  }
+
   private selectLargestCvAttachment(
     attachments: PostmarkAttachmentDto[],
   ): PostmarkAttachmentDto | null {
@@ -74,6 +113,7 @@ export class StorageService {
   private getExtension(contentType: string): string {
     const extensions: Record<string, string> = {
       'application/pdf': '.pdf',
+      'application/msword': '.doc',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
     };
     return extensions[contentType] ?? '.bin';
