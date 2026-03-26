@@ -97,7 +97,7 @@ async function main() {
     },
   });
   console.log('Upserted job:', job2.id);
-  await seedJobStages(job2.id); // <--- יצירת השלבים למשרה 2
+  await seedJobStages(job2.id);
 
   // Seed candidate 2
   const candidate2 = await prisma.candidate.upsert({
