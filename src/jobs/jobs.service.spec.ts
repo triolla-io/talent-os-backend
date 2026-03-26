@@ -304,6 +304,25 @@ describe('JobsService', () => {
       const findManyCall = mockPrismaService.job.findMany.mock.calls[0][0];
       expect(findManyCall.where).toEqual({ tenantId: TENANT_ID });
     });
+
+    it('passes status filter to Prisma when provided', async () => {
+      mockPrismaService.job.findMany.mockResolvedValue([]);
+
+      await service.findAll('open');
+
+      const findManyCall = mockPrismaService.job.findMany.mock.calls[0][0];
+      expect(findManyCall.where).toEqual({ tenantId: TENANT_ID, status: 'open' });
+    });
+
+    it('omits status filter when not provided', async () => {
+      mockPrismaService.job.findMany.mockResolvedValue([]);
+
+      await service.findAll();
+
+      const findManyCall = mockPrismaService.job.findMany.mock.calls[0][0];
+      expect(findManyCall.where).toEqual({ tenantId: TENANT_ID });
+      expect(findManyCall.where).not.toHaveProperty('status');
+    });
   });
 
   describe('deleteJob()', () => {

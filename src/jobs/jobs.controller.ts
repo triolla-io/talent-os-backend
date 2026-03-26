@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   BadRequestException,
   NotFoundException,
   HttpCode,
@@ -19,8 +20,8 @@ export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
   @Get()
-  async findAll() {
-    return this.jobsService.findAll();
+  async findAll(@Query('status') status?: string) {
+    return this.jobsService.findAll(status);
   }
 
   @Post()

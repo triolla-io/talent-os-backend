@@ -24,6 +24,20 @@ describe('JobsController', () => {
       expect(mockJobsService.findAll).toHaveBeenCalledTimes(1);
       expect(result).toBe(mockResult);
     });
+
+    it('passes status param to service', async () => {
+      const mockResult = { jobs: [], total: 0 };
+      mockJobsService.findAll.mockResolvedValue(mockResult);
+      await controller.findAll('open');
+      expect(mockJobsService.findAll).toHaveBeenCalledWith('open');
+    });
+
+    it('calls service with undefined when no status param', async () => {
+      const mockResult = { jobs: [], total: 0 };
+      mockJobsService.findAll.mockResolvedValue(mockResult);
+      await controller.findAll(undefined);
+      expect(mockJobsService.findAll).toHaveBeenCalledWith(undefined);
+    });
   });
 
   describe('POST /jobs', () => {

@@ -21,11 +21,11 @@ export class JobsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async findAll(): Promise<{ jobs: any[]; total: number }> {
+  async findAll(status?: string): Promise<{ jobs: any[]; total: number }> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
 
     const jobs = await this.prisma.job.findMany({
-      where: { tenantId },
+      where: { tenantId, ...(status ? { status } : {}) },
       include: {
         hiringStages: { orderBy: { order: 'asc' } },
         screeningQuestions: { orderBy: { order: 'asc' } },
