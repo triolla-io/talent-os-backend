@@ -19,6 +19,9 @@ function mockCandidate(overrides: Partial<{
   source: string;
   createdAt: Date;
   skills: string[];
+  jobId: string | null;
+  hiringStageId: string | null;
+  hiringStage: { name: string } | null;
   applications: { scores: { score: number }[] }[];
   duplicateFlags: { id: string }[];
 }> = {}) {
@@ -33,6 +36,9 @@ function mockCandidate(overrides: Partial<{
     source: 'linkedin',
     createdAt: new Date('2026-01-01T00:00:00Z'),
     skills: ['TypeScript', 'React'],
+    jobId: 'job-uuid',
+    hiringStageId: 'stage-uuid',
+    hiringStage: { name: 'Application Review' },
     applications: [],
     duplicateFlags: [],
     ...overrides,
@@ -243,6 +249,7 @@ describe('CandidatesService.createCandidate()', () => {
 
     mockPrisma = {
       job: { findFirst: jest.fn().mockResolvedValue({ id: BASE_DTO.job_id }) },
+      jobStage: { findFirst: jest.fn().mockResolvedValue({ id: 'stage-uuid' }) },
       candidate: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
       application: { create: jest.fn() },
       $transaction: jest.fn().mockImplementation(async (fn: any) => {
@@ -251,6 +258,8 @@ describe('CandidatesService.createCandidate()', () => {
             create: jest.fn().mockResolvedValue({
               id: 'cand-uuid',
               tenantId: 'tenant-123',
+              jobId: BASE_DTO.job_id,
+              hiringStageId: 'stage-uuid',
               fullName: BASE_DTO.full_name,
               email: BASE_DTO.email,
               phone: null,

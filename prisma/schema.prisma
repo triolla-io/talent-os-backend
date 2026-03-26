@@ -67,6 +67,7 @@ model Candidate {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId        String   @map("tenant_id") @db.Uuid
   jobId           String?  @map("job_id") @db.Uuid
+  hiringStageId   String?  @map("hiring_stage_id") @db.Uuid
   email           String?  @db.Text
   fullName        String   @map("full_name") @db.Text
   phone           String?  @db.Text
@@ -87,6 +88,7 @@ model Candidate {
   // Relations
   tenant          Tenant           @relation(fields: [tenantId], references: [id])
   job             Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  hiringStage     JobStage?        @relation("CandidateHiringStage", fields: [hiringStageId], references: [id], onDelete: SetNull)
   applications    Application[]
   duplicateFlags  DuplicateFlag[]  @relation("CandidateFlags")
   matchedIn       DuplicateFlag[]  @relation("MatchedCandidateFlags")
@@ -94,6 +96,7 @@ model Candidate {
 
   // Indexes
   @@index([tenantId, jobId], name: "idx_candidates_tenant_job")
+  @@index([tenantId, jobId, hiringStageId], name: "idx_candidates_tenant_job_stage")
 
   // Unique email per tenant (partial — only when email is not null, enforced via raw SQL index)
   @@map("candidates")
@@ -210,6 +213,7 @@ model JobStage {
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   job          Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
   applications Application[]
+  candidates   Candidate[]   @relation("CandidateHiringStage")
 
   @@index([jobId, order], name: "idx_job_stages_job_order")
   @@map("job_stages")

@@ -5,32 +5,21 @@ import {
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { StorageService } from '../storage/storage.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
+import { CandidateResponse } from './dto/candidate-response.dto';
 import { Prisma } from '@prisma/client';
 
 export type CandidateFilter = 'all' | 'high-score' | 'available' | 'referred' | 'duplicates';
 
-export interface CandidateResponse {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  current_role: string | null;
-  location: string | null;
-  cv_file_url: string | null;
-  source: string;
-  created_at: Date;
-  ai_score: number | null;
-  is_duplicate: boolean;
-  skills: string[];
-}
-
 @Injectable()
 export class CandidatesService {
+  private readonly logger = new Logger(CandidatesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -83,6 +72,11 @@ export class CandidatesService {
         source: true,
         createdAt: true,
         skills: true,
+        jobId: true,
+        hiringStageId: true,
+        hiringStage: {
+          select: { name: true },
+        },
         applications: {
           select: {
             scores: {
@@ -117,6 +111,11 @@ export class CandidatesService {
         ai_score: aiScore,
         is_duplicate: c.duplicateFlags.length > 0,
         skills: c.skills,
+
+        // Kanban board fields
+        job_id: c.jobId,
+        hiring_stage_id: c.hiringStageId,
+        hiring_stage_name: c.hiringStage?.name ?? null,
       };
     });
 
@@ -179,6 +178,28 @@ export class CandidatesService {
       }
     }
 
+    // Pre-fetch first hiring stage if job_id is provided
+    let firstStageId: string | null = null;
+    if (dto.job_id) {
+      const firstStage = await this.prisma.jobStage.findFirst({
+        where: {
+          jobId: dto.job_id,
+          tenantId,
+        },
+        orderBy: { order: 'asc' },
+        select: { id: true },
+      });
+
+      if (firstStage) {
+        firstStageId = firstStage.id;
+      } else {
+        this.logger.warn(
+          `Candidate created with job_id ${dto.job_id} but no hiring stages found. ` +
+          `Candidate will have hiringStageId=null.`,
+        );
+      }
+    }
+
     // Atomic transaction: create Candidate + Application
     const { candidate, application } = await this.prisma.$transaction(async (tx) => {
       const candidate = await tx.candidate.create({
@@ -186,6 +207,7 @@ export class CandidatesService {
           id: candidateId,
           tenantId,
           jobId: dto.job_id,
+          hiringStageId: firstStageId,
           fullName: dto.full_name,
           email: dto.email ?? null,
           phone: dto.phone ?? null,
@@ -221,6 +243,7 @@ export class CandidatesService {
       id: candidate.id,
       tenant_id: candidate.tenantId,
       job_id: candidate.jobId,
+      hiring_stage_id: candidate.hiringStageId,
       full_name: candidate.fullName,
       email: candidate.email,
       phone: candidate.phone,
