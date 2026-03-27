@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { StorageService } from '../storage/storage.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
+import { UpdateCandidateStageDto } from './dto/update-candidate-stage.dto';
 import { CandidateResponse } from './dto/candidate-response.dto';
 import { Prisma } from '@prisma/client';
 
@@ -26,11 +27,20 @@ export class CandidatesService {
     private readonly storageService: StorageService,
   ) {}
 
-  async findAll(q?: string, filter?: CandidateFilter): Promise<{ candidates: CandidateResponse[]; total: number }> {
+  async findAll(
+    q?: string,
+    filter?: CandidateFilter,
+    jobId?: string,
+  ): Promise<{ candidates: CandidateResponse[]; total: number }> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
 
     // Build WHERE conditions
     const where: Record<string, unknown> = { tenantId };
+
+    // ── NEW: filter by job ──────────────────────────────────────────────
+    if (jobId) {
+      where.jobId = jobId;
+    }
 
     if (q) {
       where.OR = [
@@ -77,6 +87,9 @@ export class CandidatesService {
         hiringStage: {
           select: { name: true },
         },
+        job: {
+          select: { title: true },
+        },
         applications: {
           select: {
             scores: {
@@ -116,6 +129,7 @@ export class CandidatesService {
         job_id: c.jobId,
         hiring_stage_id: c.hiringStageId,
         hiring_stage_name: c.hiringStage?.name ?? null,
+        job_title: c.job?.title ?? null,
       };
     });
 
@@ -125,6 +139,66 @@ export class CandidatesService {
     }
 
     return { candidates: result, total: result.length };
+  }
+
+  // ── NEW: Update candidate hiring stage (Kanban drag-and-drop) ─────────
+  async updateStage(candidateId: string, dto: UpdateCandidateStageDto): Promise<void> {
+    const tenantId = this.configService.get<string>('TENANT_ID')!;
+
+    // 1. Find the candidate and verify ownership
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id: candidateId, tenantId },
+      select: { id: true, jobId: true },
+    });
+
+    if (!candidate) {
+      throw new NotFoundException({
+        error: { code: 'NOT_FOUND', message: 'Candidate not found' },
+      });
+    }
+
+    if (!candidate.jobId) {
+      throw new BadRequestException({
+        error: { code: 'NO_JOB', message: 'Candidate is not linked to a job' },
+      });
+    }
+
+    // 2. Validate the target stage belongs to the candidate's job
+    const stage = await this.prisma.jobStage.findFirst({
+      where: {
+        id: dto.hiring_stage_id,
+        jobId: candidate.jobId,
+        tenantId,
+      },
+    });
+
+    if (!stage) {
+      throw new NotFoundException({
+        error: {
+          code: 'STAGE_NOT_FOUND',
+          message: 'Hiring stage not found for this job',
+        },
+      });
+    }
+
+    // 3. Atomic update: candidate.hiringStageId + application.jobStageId
+    await this.prisma.$transaction(async (tx) => {
+      // Update the candidate's current stage
+      await tx.candidate.update({
+        where: { id: candidateId },
+        data: { hiringStageId: dto.hiring_stage_id },
+      });
+
+      // Sync the matching application record
+      await tx.application.updateMany({
+        where: {
+          candidateId,
+          jobId: candidate.jobId!,
+          tenantId,
+        },
+        data: { jobStageId: dto.hiring_stage_id },
+      });
+    });
   }
 
   async createCandidate(
@@ -195,7 +269,7 @@ export class CandidatesService {
       } else {
         this.logger.warn(
           `Candidate created with job_id ${dto.job_id} but no hiring stages found. ` +
-          `Candidate will have hiringStageId=null.`,
+            `Candidate will have hiringStageId=null.`,
         );
       }
     }
@@ -219,9 +293,9 @@ export class CandidatesService {
           cvFileUrl,
           source: dto.source,
           sourceAgency: dto.source_agency ?? null,
-          sourceEmail: null, // D-02: null for manual adds
+          sourceEmail: null,
           aiSummary: dto.ai_summary ?? null,
-          metadata: Prisma.JsonNull as unknown as Prisma.InputJsonValue, // D-02: null for manual adds
+          metadata: Prisma.JsonNull as unknown as Prisma.InputJsonValue,
         },
       });
 
@@ -231,6 +305,7 @@ export class CandidatesService {
           candidateId: candidate.id,
           jobId: dto.job_id,
           stage: 'new', // D-04
+          jobStageId: firstStageId,
           appliedAt: new Date(),
         },
       });

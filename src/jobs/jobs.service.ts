@@ -127,6 +127,24 @@ export class JobsService {
     }));
 
     return this.prisma.$transaction(async (tx) => {
+      // ── FIX: Safely detach candidates before deleting stages ───────────
+      // The DB has a CHECK constraint: if job_id is set, hiring_stage_id must not be null.
+      // Deleting stages triggers onDelete:SetNull on hiringStageId, which violates the constraint.
+      // Solution: temporarily nullify BOTH jobId and hiringStageId, then reassign after new stages are created.
+
+      // 1. Detach candidates from their stages (nullify both to satisfy constraint)
+      await tx.candidate.updateMany({
+        where: { jobId: id, tenantId },
+        data: { hiringStageId: null, jobId: null },
+      });
+
+      // 2. Detach applications from their stages
+      await tx.application.updateMany({
+        where: { jobId: id, tenantId },
+        data: { jobStageId: null },
+      });
+
+      // 3. Now safe to delete old stages and recreate
       const job = await tx.job.update({
         where: { id, tenantId },
         data: {
@@ -160,6 +178,40 @@ export class JobsService {
           _count: { select: { candidates: true } },
         },
       });
+
+      // 4. Re-attach candidates to the job and assign them to the first stage
+      const firstStage = job.hiringStages[0];
+      if (firstStage) {
+        await tx.candidate.updateMany({
+          where: {
+            // Find candidates that were detached (jobId is null but have an application for this job)
+            tenantId,
+            jobId: null,
+            applications: { some: { jobId: id } },
+          },
+          data: {
+            jobId: id,
+            hiringStageId: firstStage.id,
+          },
+        });
+
+        // 5. Re-attach applications to the first stage
+        await tx.application.updateMany({
+          where: { jobId: id, tenantId },
+          data: { jobStageId: firstStage.id },
+        });
+      } else {
+        // No stages — just re-attach candidates to the job without a stage
+        // This path should not happen since validation requires at least one enabled stage
+        await tx.candidate.updateMany({
+          where: {
+            tenantId,
+            jobId: null,
+            applications: { some: { jobId: id } },
+          },
+          data: { jobId: id },
+        });
+      }
 
       return this._formatJobResponse(job);
     });

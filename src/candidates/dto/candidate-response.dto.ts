@@ -1,6 +1,6 @@
 /**
  * DTO for GET /api/candidates response
- * Includes hiring stage information for Kanban board rendering
+ * Includes hiring stage and job info for Kanban board and Talent Pool table
  */
 export interface CandidateResponse {
   id: string;
@@ -16,8 +16,11 @@ export interface CandidateResponse {
   is_duplicate: boolean;
   skills: string[];
 
-  // NEW: Kanban board stage tracking
+  // Kanban board stage tracking
   job_id: string | null;
   hiring_stage_id: string | null;
   hiring_stage_name: string | null;
+
+  // Job info for Talent Pool table
+  job_title: string | null;
 }
