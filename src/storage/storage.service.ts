@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { PostmarkAttachmentDto } from '../webhooks/dto/postmark-payload.dto';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const CV_MIME_TYPES = [
   'application/pdf',
@@ -25,11 +26,7 @@ export class StorageService {
   }
 
   // D-01, D-02, D-04, D-06, D-10, D-11
-  async upload(
-    attachments: PostmarkAttachmentDto[],
-    tenantId: string,
-    messageId: string,
-  ): Promise<string | null> {
+  async upload(attachments: PostmarkAttachmentDto[], tenantId: string, messageId: string): Promise<string | null> {
     // D-01: Select largest PDF/DOCX; filters out signature images, logos, etc.
     const selected = this.selectLargestCvAttachment(attachments);
     if (!selected) {
@@ -58,14 +55,17 @@ export class StorageService {
     return key;
   }
 
+  async getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.config.get<string>('R2_BUCKET_NAME')!,
+      Key: key,
+    });
+    return getSignedUrl(this.s3Client, command, { expiresIn });
+  }
+
   // Upload from a raw buffer (used for UI-uploaded files)
   // D-02: cv_text stays null; returns R2 object key only (not presigned URL)
-  async uploadFromBuffer(
-    buffer: Buffer,
-    mimetype: string,
-    tenantId: string,
-    candidateId: string,
-  ): Promise<string> {
+  async uploadFromBuffer(buffer: Buffer, mimetype: string, tenantId: string, candidateId: string): Promise<string> {
     const ALLOWED_MIME_TYPES = [
       'application/pdf',
       'application/msword',
@@ -97,13 +97,9 @@ export class StorageService {
     return key;
   }
 
-  private selectLargestCvAttachment(
-    attachments: PostmarkAttachmentDto[],
-  ): PostmarkAttachmentDto | null {
+  private selectLargestCvAttachment(attachments: PostmarkAttachmentDto[]): PostmarkAttachmentDto | null {
     // D-01: Only PDF/DOCX; picks the one with the largest ContentLength
-    const cvFiles = attachments.filter((att) =>
-      (CV_MIME_TYPES as readonly string[]).includes(att.ContentType),
-    );
+    const cvFiles = attachments.filter((att) => (CV_MIME_TYPES as readonly string[]).includes(att.ContentType));
     if (cvFiles.length === 0) return null;
     return cvFiles.reduce((largest, current) =>
       (current.ContentLength ?? 0) > (largest.ContentLength ?? 0) ? current : largest,
