@@ -11,6 +11,7 @@ export interface CandidateResponse {
   location: string | null;
   cv_file_url: string | null;
   source: string;
+  source_agency: string | null;
   created_at: Date;
   ai_score: number | null;
   is_duplicate: boolean;
