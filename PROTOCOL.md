@@ -18,6 +18,7 @@ This document is the single source of truth for all API endpoints supported by t
 Fetch candidates with optional search and filtering.
 
 **Query Parameters:**
+
 - `q` (optional): Search query matching name, role, or email (case-insensitive substring match)
 - `filter` (optional): Filter type
   - `all` — all candidates (default)
@@ -25,6 +26,7 @@ Fetch candidates with optional search and filtering.
   - `available` — candidates with no hired/rejected applications
   - `referred` — candidates sourced from referral
   - `duplicates` — candidates with unreviewed duplicate flags
+- `job_id` (optional): Filter candidates by job UUID (used for Kanban view)
 
 **Response:** `200 OK`
 
@@ -40,10 +42,15 @@ Fetch candidates with optional search and filtering.
       "location": "Tel Aviv",
       "cv_file_url": "https://...",
       "source": "linkedin",
+      "source_agency": null,
       "created_at": "ISO8601",
       "ai_score": 85,
       "is_duplicate": false,
-      "skills": ["React", "TypeScript"]
+      "skills": ["React", "TypeScript"],
+      "job_id": "uuid",
+      "hiring_stage_id": "uuid",
+      "hiring_stage_name": "Screening",
+      "job_title": "Senior Frontend Developer"
     }
   ],
   "total": 1
@@ -57,6 +64,7 @@ Create a new candidate profile, optionally with a CV file upload.
 **Content-Type:** `multipart/form-data`
 
 **Form Fields:**
+
 - `cv_file` (optional): CV file (binary upload)
 - All other candidate fields as form data (mirroring the body fields below)
 
@@ -80,18 +88,59 @@ Create a new candidate profile, optionally with a CV file upload.
 ```
 
 **Notes:**
+
 - `full_name` and `source` are required
-- `email`, `phone`, `current_role`, `location`, `years_experience`, `ai_summary`, `cv_file_url`, `source_agency` are nullable
+- `email`, `phone`, `current_role`, `location`, `years_experience`, `ai_summary`, `source_agency` are nullable
 - `job_id` is required — links the candidate to a specific job opening
-- `source` must be one of: `linkedin`, `website`, `agency`, `referral`, `direct`
+- `source` must be one of: `linkedin`, `website`, `agency`, `referral`, `direct`, `manual`
 - `source_agency` is only relevant when `source = agency`
-- If `cv_file` is provided it is stored and `cv_file_url` is set on the created record
+- `cv_file` upload is binary; the server saves it and manages the `cv_file_url`
+- `skills` can be passed as an array, a comma-separated string, or a JSON string
 
 **Response:** `201 Created` (returns full candidate object, same structure as GET /candidates item)
 
 **Errors:**
+
 - `400 Bad Request` — validation failed
 - `500 Internal Server Error` — server error
+
+### `GET /candidates/:id/cv-url`
+
+Fetch a presigned S3 URL for a candidate's CV (valid for 1 hour).
+
+**Response:** `200 OK`
+
+```json
+{
+  "cv_url": "https://..."
+}
+```
+
+### `PATCH /candidates/:id/stage`
+
+Update a candidate's hiring stage (used for Kanban board drag-and-drop).
+
+**Request Body:**
+
+```json
+{
+  "stage_id": "uuid"
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+### `DELETE /candidates/:id`
+
+Hard-delete a candidate and all related data (applications, scores, flags).
+
+**Response:** `204 No Content`
 
 ---
 
@@ -102,6 +151,7 @@ Create a new candidate profile, optionally with a CV file upload.
 Fetch all job openings with hiring stages and screening questions.
 
 **Query Parameters:**
+
 - `status` (optional): Filter by job status — `draft`, `open`, or `closed`. If omitted, all statuses are returned.
 
 **Response:** `200 OK`
@@ -201,6 +251,7 @@ Create a new job opening.
 ```
 
 **Notes:**
+
 - `title` is required
 - `hiring_flow[].id` and `screening_questions[].id` are optional — used by the client to pass temp UUIDs; ignored by the server
 - If `hiring_flow` is omitted or empty, **8** default stages are seeded automatically:
@@ -212,6 +263,7 @@ Create a new job opening.
 **Response:** `201 Created` (returns full job object, same structure as GET /jobs)
 
 **Errors:**
+
 - `400 Bad Request` — validation failed
 - `500 Internal Server Error` — server error
 
@@ -220,6 +272,7 @@ Create a new job opening.
 Update an existing job opening.
 
 **Path Parameters:**
+
 - `id` (required): Job UUID
 
 **Request Body:** Same structure as POST /jobs
@@ -227,6 +280,7 @@ Update an existing job opening.
 **Response:** `200 OK` (returns updated job object)
 
 **Errors:**
+
 - `400 Bad Request` — validation failed
 - `404 Not Found` — job not found
 - `500 Internal Server Error` — server error
@@ -236,13 +290,23 @@ Update an existing job opening.
 Soft-delete a job (sets status to `closed`).
 
 **Path Parameters:**
+
 - `id` (required): Job UUID
 
 **Response:** `204 No Content`
 
 **Errors:**
+
 - `404 Not Found` — job not found
 - `500 Internal Server Error` — server error
+
+### `DELETE /jobs/:id/hard`
+
+Hard-delete a job and all related data (stages, questions, applications, scores).
+
+- Candidates linked to this job will have their `job_id` and `hiring_stage_id` set to `null`.
+
+**Response:** `204 No Content`
 
 ### `GET /jobs/list`
 
@@ -252,13 +316,12 @@ Fetch a lightweight list of open jobs (for dropdowns / job selectors).
 
 ```json
 {
-  "jobs": [
-    { "id": "uuid", "title": "Senior Frontend Developer", "department": "Engineering" }
-  ]
+  "jobs": [{ "id": "uuid", "title": "Senior Frontend Developer", "department": "Engineering" }]
 }
 ```
 
 **Notes:**
+
 - Returns only jobs with `status = open`
 - `department` may be `null` if not set on the job
 - Intended for use in dropdowns and candidate application forms
@@ -315,12 +378,14 @@ Postmark inbound webhook for email-based CV intake.
 ```
 
 **Behavior:**
+
 - Validates Postmark webhook signature
 - Idempotent: returns 200 on duplicate MessageID
 - Enqueues email processing to BullMQ for async extraction, dedup, and scoring
 - Returns 5xx if enqueue fails (Postmark will retry)
 
 **Errors:**
+
 - `401 Unauthorized` — invalid Postmark signature
 - `500 Internal Server Error` — failed to enqueue job (Postmark will retry)
 
@@ -339,6 +404,7 @@ Health check endpoint for monitoring dependencies.
 ```
 
 **Response Status Codes:**
+
 - `200 OK` — all systems healthy
 - `503 Service Unavailable` — one or more dependencies degraded
 
@@ -364,13 +430,7 @@ Fetch configuration options for UI dropdowns and templates.
 
 ```json
 {
-  "departments": [
-    "Engineering",
-    "Product",
-    "Design",
-    "Marketing",
-    "HR"
-  ],
+  "departments": ["Engineering", "Product", "Design", "Marketing", "HR"],
   "hiring_managers": [
     { "id": "mgr-1", "name": "Jane Smith" },
     { "id": "mgr-2", "name": "Admin Cohen" }
@@ -390,14 +450,14 @@ Fetch configuration options for UI dropdowns and templates.
     { "id": "text", "label": "Free Text" }
   ],
   "hiring_stages_template": [
-    { "name": "Application Review", "is_enabled": true,  "color": "bg-zinc-400",   "is_custom": false, "order": 1 },
-    { "name": "Screening",          "is_enabled": true,  "color": "bg-blue-500",   "is_custom": false, "order": 2 },
-    { "name": "Interview",          "is_enabled": true,  "color": "bg-indigo-400", "is_custom": false, "order": 3 },
-    { "name": "Offer",              "is_enabled": true,  "color": "bg-emerald-500","is_custom": false, "order": 4 },
-    { "name": "Hired",              "is_enabled": false, "color": "bg-green-600",  "is_custom": false, "order": 5 },
-    { "name": "Rejected",           "is_enabled": false, "color": "bg-red-500",    "is_custom": false, "order": 6 },
-    { "name": "Pending Decision",   "is_enabled": false, "color": "bg-yellow-400", "is_custom": false, "order": 7 },
-    { "name": "On Hold",            "is_enabled": false, "color": "bg-gray-500",   "is_custom": false, "order": 8 }
+    { "name": "Application Review", "is_enabled": true, "color": "bg-zinc-400", "is_custom": false, "order": 1 },
+    { "name": "Screening", "is_enabled": true, "color": "bg-blue-500", "is_custom": false, "order": 2 },
+    { "name": "Interview", "is_enabled": true, "color": "bg-indigo-400", "is_custom": false, "order": 3 },
+    { "name": "Offer", "is_enabled": true, "color": "bg-emerald-500", "is_custom": false, "order": 4 },
+    { "name": "Hired", "is_enabled": false, "color": "bg-green-600", "is_custom": false, "order": 5 },
+    { "name": "Rejected", "is_enabled": false, "color": "bg-red-500", "is_custom": false, "order": 6 },
+    { "name": "Pending Decision", "is_enabled": false, "color": "bg-yellow-400", "is_custom": false, "order": 7 },
+    { "name": "On Hold", "is_enabled": false, "color": "bg-gray-500", "is_custom": false, "order": 8 }
   ]
 }
 ```
@@ -407,18 +467,23 @@ Fetch configuration options for UI dropdowns and templates.
 ## Data Enums & Values
 
 ### Candidate Source
-- `linkedin`, `website`, `agency`, `referral`, `direct`
+
+- `linkedin`, `website`, `agency`, `referral`, `direct`, `manual`
 
 ### Application Stage
+
 - `new`, `screening`, `interview`, `offer`, `hired`, `rejected`
 
 ### Job Status
+
 - `draft`, `open`, `closed`
 
 ### Job Type
+
 - `full_time`, `part_time`, `contract`
 
 ### Screening Question Type
+
 - `yes_no`, `text`
 
 ---
@@ -438,7 +503,20 @@ All error responses follow this structure:
 ```
 
 **Common Error Codes:**
-- `VALIDATION_ERROR` — request validation failed (includes field-level errors in `details`)
+
+- `VALIDATION_ERROR` — request validation failed. Includes field-level errors in `details`.
+  ```json
+  {
+    "error": {
+      "code": "VALIDATION_ERROR",
+      "message": "Validation failed",
+      "details": {
+        "email": ["Must be a valid email"],
+        "full_name": ["Full name is required"]
+      }
+    }
+  }
+  ```
 - `NOT_FOUND` — requested resource not found
 - `UNAUTHORIZED` — authentication failed (webhooks only)
 
@@ -447,6 +525,7 @@ All error responses follow this structure:
 ## Multi-Tenancy
 
 All endpoints operate within a tenant context:
+
 - Tenant ID is determined by the `x-tenant-id` header or environment config
 - All data is automatically filtered by tenant
 - No cross-tenant data leakage is possible
