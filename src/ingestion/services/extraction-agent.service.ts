@@ -112,7 +112,7 @@ export class ExtractionAgentService {
 
     const parseResult = CandidateExtractSchema.safeParse(JSON.parse(json));
     if (!parseResult.success) {
-      this.logger.error('LLM returned invalid JSON structure', parseResult.error.errors);
+      this.logger.error('LLM returned invalid JSON structure', parseResult.error.issues);
       throw new Error(`LLM output validation failed: ${parseResult.error.message}`);
     }
     this.logger.log('OpenRouter extraction successful', parseResult.data);

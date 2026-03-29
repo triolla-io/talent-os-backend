@@ -268,7 +268,7 @@ Plans:
 | 11. API Protocol MVP Implementation | 1/1 | Complete    | 2026-03-25 |
 | 12. Support add candidate from the UI | 1/1 | Planned | 2026-03-26 |
 | 13. Implement Kanban board with candidate hiring stage tracking | 1/1 | Planned | 2026-03-26 |
-| 14. Wire OpenRouter extraction pipeline | 1/3 | In Progress|  |
+| 14. Wire OpenRouter extraction pipeline | 1/3 | Complete    | 2026-03-29 |
 
 ### Phase 12: Support add candidate from the UI
 
@@ -319,7 +319,7 @@ Plans:
 6. DedupService.insertCandidate() uses extraction.source_hint for source field (not always 'direct')
 7. Full npm test suite passes with all new tests green
 
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 14-01-PLAN.md — Wave 1A: Extend CandidateExtractSchema (9 fields), fix extract() error handling, update signatures, update test helpers

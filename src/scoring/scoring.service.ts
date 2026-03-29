@@ -91,7 +91,7 @@ export class ScoringAgentService {
 
     const parseResult = ScoreSchema.safeParse(JSON.parse(json));
     if (!parseResult.success) {
-      this.logger.error('Scoring LLM returned invalid JSON', parseResult.error.errors);
+      this.logger.error('Scoring LLM returned invalid JSON', parseResult.error.issues);
       throw new Error(`Scoring output validation failed: ${parseResult.error.message}`);
     }
 
