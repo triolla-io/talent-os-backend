@@ -1,7 +1,7 @@
 # Roadmap: Triolla Talent OS — Backend (Phase 1)
 
 **Created:** 2026-03-22
-**Phases:** 13
+**Phases:** 14
 **Granularity:** Standard
 **Coverage:** 40/40 v1 requirements mapped
 
@@ -268,6 +268,7 @@ Plans:
 | 11. API Protocol MVP Implementation | 1/1 | Complete    | 2026-03-25 |
 | 12. Support add candidate from the UI | 1/1 | Planned | 2026-03-26 |
 | 13. Implement Kanban board with candidate hiring stage tracking | 1/1 | Planned | 2026-03-26 |
+| 14. Wire OpenRouter extraction pipeline | 3/3 | Planned | 2026-03-29 |
 
 ### Phase 12: Support add candidate from the UI
 
@@ -301,7 +302,31 @@ Plans:
 Plans:
 - [x] 13-01-PLAN.md — Wave 1: Schema update, migration with 3-step backfill, service logic, API response extension, tests
 
+### Phase 14: Wire OpenRouter extraction pipeline: email→LLM→dedup→scoring→UI
+
+**Goal:** Fix critical bugs and gaps in the email-to-candidate pipeline: error swallowing prevents BullMQ retries; schema missing 4 fields (currentRole, yearsExperience, location, source_hint); scoring is a hardcoded mock (score=72 always); deterministic fallback is dead code. After this phase: extraction errors propagate correctly, all candidate fields extracted, real Gemini LLM scoring via OpenRouter, deterministic fallback on final BullMQ attempt.
+
+**Depends on:** Phase 13
+
+**Requirements:** AIEX-01, AIEX-02, AIEX-03, CAND-01, CAND-02, CAND-03, SCOR-01, SCOR-02, SCOR-03, SCOR-04, SCOR-05
+
+**Success Criteria** (what must be TRUE):
+1. CandidateExtractSchema has 9 fields: full_name, email, phone, current_role, years_experience, location, skills, ai_summary, source_hint
+2. extract() throws on API error (no more silent fallback swallowing); BullMQ retries on transient failures
+3. On final BullMQ attempt (3/3), extractDeterministically() is called before marking job failed
+4. ScoringAgentService calls OpenRouter with google/gemini-2.0-flash:free (no hardcoded score=72)
+5. Phase 7 candidate.update sets currentRole, yearsExperience, location from extraction (not null)
+6. DedupService.insertCandidate() uses extraction.source_hint for source field (not always 'direct')
+7. Full npm test suite passes with all new tests green
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Wave 1A: Extend CandidateExtractSchema (9 fields), fix extract() error handling, update signatures, update test helpers
+- [ ] 14-02-PLAN.md — Wave 1B: Replace mock ScoringAgentService with real OpenRouter call, add ConfigModule to ScoringModule
+- [ ] 14-03-PLAN.md — Wave 2: Update processor (metadata, enrichment fields, deterministic fallback), DedupService source param, 5 new integration tests
+
 ---
 
 *Roadmap created: 2026-03-22 by /gsd:new-roadmap*
-*Updated: 2026-03-26 by plan-phase (Phase 13 planning complete)*
+*Updated: 2026-03-29 by plan-phase (Phase 14 planning complete)*
