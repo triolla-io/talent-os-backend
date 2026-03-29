@@ -11,6 +11,7 @@ import { ExtractionAgentService, CandidateExtract } from './services/extraction-
 import { StorageService } from '../storage/storage.service';
 import { DedupService, DedupResult } from '../dedup/dedup.service';
 import { ScoringAgentService, ScoringInput } from '../scoring/scoring.service';
+import { JobTitleMatcherService } from '../scoring/job-title-matcher.service';
 
 export interface ProcessingContext {
   fullText: string;
@@ -37,6 +38,7 @@ export class IngestionProcessor extends WorkerHost {
     private readonly storageService: StorageService,
     private readonly dedupService: DedupService,
     private readonly scoringService: ScoringAgentService,
+    private readonly jobTitleMatcher: JobTitleMatcherService,
   ) {
     super();
   }
@@ -214,21 +216,17 @@ export class IngestionProcessor extends WorkerHost {
 
     this.logger.log(`Phase 6 complete for MessageID: ${payload.MessageID} — candidateId: ${candidateId}`);
 
-    // Phase 6.5: Job matching by fuzzy title match (Phase 14 — required for job assignment)
-    // Find BEST matching active job (not just first one)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let matchedJob: any = null;
-    let bestSimilarity = 0;
+    // Phase 6.5: Semantic job title matching (early-exit on first confident match)
+    let matchedJob: { id: string; title: string; description: string | null; requirements: string[]; hiringStages: { id: string }[] } | null = null;
 
     if (extraction!.job_title_hint) {
       const activeJobs = await this.prisma.job.findMany({
-        where: {
-          tenantId,
-          status: 'open',
-        },
+        where: { tenantId, status: 'open' },
         select: {
           id: true,
           title: true,
+          description: true,
+          requirements: true,
           hiringStages: {
             where: { isEnabled: true },
             orderBy: { order: 'asc' },
@@ -238,19 +236,25 @@ export class IngestionProcessor extends WorkerHost {
       });
 
       for (const job of activeJobs) {
-        const similarity = this.calculateSimilarity(extraction!.job_title_hint, job.title);
-        if (similarity > bestSimilarity) {
-          bestSimilarity = similarity;
+        const matchResult = await this.jobTitleMatcher.matchJobTitles(
+          extraction!.job_title_hint,
+          job.title,
+          tenantId,
+        );
+
+        if (matchResult.confidence > 0.7) {
           matchedJob = job;
+          this.logger.log(
+            `Phase 6.5: matched job "${job.title}" with confidence ${matchResult.confidence.toFixed(2)} — ${matchResult.reasoning ?? ''}`,
+          );
+          break; // Early exit — first confident match wins, saves API calls
         }
       }
 
-      // Only assign if similarity meets threshold
-      if (bestSimilarity < 0.7) {
+      if (!matchedJob) {
         this.logger.warn(
-          `Best matching job "${matchedJob?.title || 'none'}" similarity (${bestSimilarity.toFixed(2)}) below threshold for "${extraction!.job_title_hint}"`,
+          `Phase 6.5: no active job matched title hint "${extraction!.job_title_hint}" above confidence threshold 0.7`,
         );
-        matchedJob = null;
       }
     }
 
@@ -258,11 +262,7 @@ export class IngestionProcessor extends WorkerHost {
     const jobId = matchedJob?.id ?? null;
     const hiringStageId = matchedJob?.hiringStages[0]?.id ?? null;
 
-    if (matchedJob) {
-      this.logger.log(
-        `Phase 6.5 complete for MessageID: ${payload.MessageID} — matched job: ${matchedJob.title} (similarity: ${bestSimilarity.toFixed(2)})`,
-      );
-    } else {
+    if (!matchedJob) {
       this.logger.warn(
         `No active job found matching title hint "${extraction!.job_title_hint}" for MessageID: ${payload.MessageID} — proceeding with unassigned candidate`,
       );
@@ -368,33 +368,4 @@ export class IngestionProcessor extends WorkerHost {
     this.logger.log(`Phase 7 complete for MessageID: ${payload.MessageID} — pipeline finished`);
   }
 
-  private calculateSimilarity(a: string, b: string): number {
-    // Simple Levenshtein-based similarity (0-1 scale)
-    // For production, use pg_trgm directly via raw query:
-    // similarity(a, b) returns 0-1 where 1 is exact match
-    const s1 = a.toLowerCase();
-    const s2 = b.toLowerCase();
-    const longer = s1.length > s2.length ? s1 : s2;
-    const shorter = s1.length > s2.length ? s2 : s1;
-    if (longer.length === 0) return 1.0;
-    const editDistance = this.levenshteinDistance(longer, shorter);
-    return (longer.length - editDistance) / longer.length;
-  }
-
-  private levenshteinDistance(a: string, b: string): number {
-    const alen = a.length;
-    const blen = b.length;
-    const d = Array(alen + 1)
-      .fill(0)
-      .map(() => Array(blen + 1).fill(0));
-    for (let i = 0; i <= alen; i++) d[i][0] = i;
-    for (let j = 0; j <= blen; j++) d[0][j] = j;
-    for (let i = 1; i <= alen; i++) {
-      for (let j = 1; j <= blen; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
-      }
-    }
-    return d[alen][blen];
-  }
 }

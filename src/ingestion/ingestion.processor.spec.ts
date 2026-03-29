@@ -10,6 +10,7 @@ import { mockCandidateExtract } from './services/extraction-agent.service.test-h
 import { StorageService } from '../storage/storage.service';
 import { DedupService } from '../dedup/dedup.service';
 import { ScoringAgentService } from '../scoring/scoring.service';
+import { JobTitleMatcherService } from '../scoring/job-title-matcher.service';
 import { Prisma } from '@prisma/client';
 
 // Mock @openrouter/sdk to prevent ESM parse errors (ExtractionAgentService is provided as a mock anyway)
@@ -70,6 +71,7 @@ describe('IngestionProcessor', () => {
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, reasoning: '', strengths: [], gaps: [], modelUsed: 'test' }) } },
+        { provide: JobTitleMatcherService, useValue: { matchJobTitles: jest.fn().mockResolvedValue({ matched: false, confidence: 0 }) } },
       ],
     }).compile();
 
@@ -247,6 +249,7 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, reasoning: '', strengths: [], gaps: [], modelUsed: 'test' }) } },
+        { provide: JobTitleMatcherService, useValue: { matchJobTitles: jest.fn().mockResolvedValue({ matched: false, confidence: 0 }) } },
       ],
     }).compile();
 
@@ -392,6 +395,7 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, reasoning: '', strengths: [], gaps: [], modelUsed: 'test' }) } },
+        { provide: JobTitleMatcherService, useValue: { matchJobTitles: jest.fn().mockResolvedValue({ matched: false, confidence: 0 }) } },
       ],
     }).compile();
 
@@ -572,6 +576,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: scoringService },
+        { provide: JobTitleMatcherService, useValue: { matchJobTitles: jest.fn().mockResolvedValue({ matched: true, confidence: 0.95, reasoning: 'exact match' }) } },
       ],
     }).compile();
 
@@ -710,6 +715,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
     let processor: IngestionProcessor;
     let prisma: any;
     let extractionAgent: any;
+    let jobTitleMatcher: { matchJobTitles: jest.Mock };
 
     const job1 = { id: 'job-1', title: 'Full Stack Engineer', status: 'active', hiringStages: [{ id: 'stage-1' }] };
     const job2 = { id: 'job-2', title: 'Backend Developer', status: 'active', hiringStages: [{ id: 'stage-2' }] };
@@ -725,6 +731,15 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
         candidateJobScore: { create: jest.fn().mockResolvedValue({}) },
       };
       extractionAgent = { extract: jest.fn().mockResolvedValue({ ...mockCandidateExtract(), job_title_hint: 'Full Stack Developer' }) };
+      // Default: job1 (Full Stack Engineer) matches with high confidence; job2 (Backend Developer) does not
+      jobTitleMatcher = {
+        matchJobTitles: jest.fn().mockImplementation((_candidate: string, positionTitle: string) => {
+          if (positionTitle === 'Full Stack Engineer') {
+            return Promise.resolve({ matched: true, confidence: 0.85, reasoning: 'Semantic match' });
+          }
+          return Promise.resolve({ matched: false, confidence: 0.3, reasoning: 'Low match' });
+        }),
+      };
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -737,16 +752,17 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
           { provide: StorageService, useValue: { upload: jest.fn().mockResolvedValue('key') } },
           { provide: DedupService, useValue: { check: jest.fn().mockResolvedValue(null), insertCandidate: jest.fn().mockResolvedValue('cand-1') } },
           { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, modelUsed: 'test' }) } },
+          { provide: JobTitleMatcherService, useValue: jobTitleMatcher },
         ],
       }).compile();
       processor = module.get<IngestionProcessor>(IngestionProcessor);
     });
 
-    it('matches the job with the highest similarity (Full Stack Developer matched to Full Stack Engineer)', async () => {
+    it('matches the first job with confidence > 0.7 (Full Stack Developer matched to Full Stack Engineer)', async () => {
       const job = { id: 'test-match-1', data: mockPostmarkPayload({ TextBody: 'a'.repeat(101) }) } as any;
       await processor.process(job);
 
-      // Should pick job1 over job2 because "Full Stack Developer" is closer to "Full Stack Engineer"
+      // Should pick job1 because "Full Stack Developer" vs "Full Stack Engineer" returns confidence 0.85 > 0.7
       expect(prisma.candidate.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ jobId: 'job-1' }),
@@ -756,6 +772,8 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
 
     it('proceeds with null jobId and skips scoring if no match meets threshold', async () => {
       extractionAgent.extract.mockResolvedValueOnce({ ...mockCandidateExtract(), job_title_hint: 'Accountant' });
+      // Override: all jobs return low confidence for "Accountant"
+      jobTitleMatcher.matchJobTitles.mockResolvedValue({ matched: false, confidence: 0.1, reasoning: 'No match' });
       const job = { id: 'test-match-2', data: mockPostmarkPayload({ TextBody: 'a'.repeat(101) }) } as any;
       await processor.process(job);
 
