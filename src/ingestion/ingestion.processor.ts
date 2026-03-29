@@ -296,72 +296,68 @@ export class IngestionProcessor extends WorkerHost {
       return;
     }
 
-    // Phase 7: Active jobs fetch (SCOR-01, D-11)
-    const activeJobs = await this.prisma.job.findMany({
-      where: { tenantId, status: 'open' },
-      select: { id: true, title: true, description: true, requirements: true },
+    // Phase 7: Score candidate against matched job only (SCOR-01, D-11)
+    // If matchedJob is null (no match), we already returned at line 296
+    const activeJob = matchedJob; // matchedJob guaranteed to exist here (line 293 guard)
+
+    // SCOR-02: upsert application row first — idempotent on retry
+    const application = await this.prisma.application.upsert({
+      where: {
+        idx_applications_unique: {
+          tenantId,
+          candidateId: context.candidateId,
+          jobId: activeJob.id,
+        },
+      },
+      create: { tenantId, candidateId: context.candidateId, jobId: activeJob.id, stage: 'new' },
+      update: {}, // No-op on retry
+      select: { id: true },
     });
 
-    // D-11: if no active jobs, skip loop entirely — still mark as completed
-    for (const activeJob of activeJobs) {
-      // SCOR-02 (D-12): upsert application row first — idempotent on retry
-      const application = await this.prisma.application.upsert({
-        where: {
-          idx_applications_unique: {
-            tenantId,
-            candidateId: context.candidateId,
-            jobId: activeJob.id,
-          },
+    // SCOR-03: score candidate against matched job (single call, not loop)
+    let scoreResult;
+    try {
+      scoreResult = await this.scoringService.score({
+        cvText: context.cvText,
+        candidateFields: {
+          currentRole: extraction!.current_role ?? null,
+          yearsExperience: extraction!.years_experience ?? null,
+          skills: extraction!.skills ?? [],
         },
-        create: { tenantId, candidateId: context.candidateId, jobId: activeJob.id, stage: 'new' },
-        update: {}, // No-op on retry — idempotent
-        select: { id: true },
-      });
-
-      // SCOR-03 (D-07): score candidate against job with error isolation (Issue Fix 2)
-      let scoreResult;
-      try {
-        scoreResult = await this.scoringService.score({
-          cvText: context.cvText,
-          candidateFields: {
-            currentRole: extraction!.current_role ?? null,
-            yearsExperience: extraction!.years_experience ?? null,
-            skills: extraction!.skills ?? [],
-          },
-          job: {
-            title: activeJob.title,
-            description: activeJob.description ?? null,
-            requirements: activeJob.requirements,
-          },
-        } satisfies ScoringInput);
-      } catch (err) {
-        // Issue Fix 2: Log and continue — don't fail the entire candidate on one bad job score
-        this.logger.error(
-          `Scoring failed for candidateId: ${context.candidateId}, jobId: ${activeJob.id} — ${(err as Error).message}`,
-        );
-        // D-13: If we skip the INSERT on error, this application has no score. This is acceptable.
-        // Phase 2 can filter applications without scores if needed.
-        continue;
-      }
-
-      // SCOR-04, SCOR-05 (D-13): append-only INSERT — never upsert
-      // D-13: Score INSERTs are append-only. Retries will create duplicate rows — acceptable for Phase 1.
-      await this.prisma.candidateJobScore.create({
-        data: {
-          tenantId,
-          applicationId: application.id,
-          score: scoreResult.score,
-          reasoning: scoreResult.reasoning,
-          strengths: scoreResult.strengths,
-          gaps: scoreResult.gaps,
-          modelUsed: scoreResult.modelUsed,
+        job: {
+          title: activeJob.title,
+          description: activeJob.description ?? null,
+          requirements: activeJob.requirements,
         },
-      });
-
-      this.logger.log(
-        `Phase 7 scored candidateId: ${context.candidateId} against jobId: ${activeJob.id} — score: ${scoreResult.score}`,
+      } satisfies ScoringInput);
+    } catch (err) {
+      this.logger.error(
+        `Scoring failed for candidateId: ${context.candidateId}, jobId: ${activeJob.id} — ${(err as Error).message}`,
       );
+      // Mark intake as failed if even the matched job scoring fails
+      await this.prisma.emailIntakeLog.update({
+        where: { idx_intake_message_id: { tenantId, messageId: payload.MessageID } },
+        data: { processingStatus: 'failed', errorMessage: (err as Error).message },
+      });
+      throw err;
     }
+
+    // SCOR-04, SCOR-05: append-only INSERT
+    await this.prisma.candidateJobScore.create({
+      data: {
+        tenantId,
+        applicationId: application.id,
+        score: scoreResult.score,
+        reasoning: scoreResult.reasoning,
+        strengths: scoreResult.strengths,
+        gaps: scoreResult.gaps,
+        modelUsed: scoreResult.modelUsed,
+      },
+    });
+
+    this.logger.log(
+      `Phase 7 scored candidateId: ${context.candidateId} against jobId: ${activeJob.id} — score: ${scoreResult.score}`,
+    );
 
     // D-16: terminal status — set AFTER all Phase 7 work completes (only reached if no error thrown)
     await this.prisma.emailIntakeLog.update({

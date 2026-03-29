@@ -613,7 +613,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
     );
   });
 
-  it('7-02-02: SCOR-01 — job.findMany called with tenantId and status=open', async () => {
+  it('7-02-02: SCOR-01 — job.findMany called once for Phase 6.5 matching only (no Phase 7 loop)', async () => {
     const job = { id: 'test-p7-2', data: validJobPayload() } as any;
     await processor.process(job);
 
@@ -622,8 +622,8 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
         where: { tenantId: 'test-tenant-id', status: 'open' },
       }),
     );
-    // Called once for Phase 6.5 (matching) and once for Phase 7 (scoring)
-    expect(prisma.job.findMany).toHaveBeenCalledTimes(2);
+    // Called once for Phase 6.5 (matching) — Phase 7 uses matched job directly, no second fetch
+    expect(prisma.job.findMany).toHaveBeenCalledTimes(1);
   });
 
   // 7-02-03: SCOR-02 + SCOR-04 — application upserted then score created per active job
@@ -681,28 +681,28 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
     expect(prisma.candidateJobScore.create).toHaveBeenCalled();
   });
 
-  // 7-02-06: Issue Fix 2 — Scoring error for one job does not fail entire candidate
-  it('7-02-06: Issue Fix 2 — scoring fails for one job; other jobs continue (error isolation)', async () => {
-    const job2 = { id: 'job-id-2', title: 'Frontend Engineer', description: 'Build UIs.', requirements: ['React'], hiringStages: [{ id: 'stage-2' }] };
-    prisma.job.findMany.mockResolvedValue([activeJob, job2]);
-
-    // First call succeeds, second fails
-    scoringService.score
-      .mockResolvedValueOnce({ score: 72, reasoning: 'Good.', strengths: ['TS'], gaps: [], modelUsed: 'claude-sonnet-4-6' })
-      .mockRejectedValueOnce(new Error('Anthropic API timeout'));
+  // 7-02-06: Scoring error on matched job — marks intake as failed and throws (retried by BullMQ)
+  it('7-02-06: Scoring error on matched job — marks intake as failed and throws for retry', async () => {
+    scoringService.score.mockRejectedValueOnce(new Error('Anthropic API timeout'));
 
     const jobData = { id: 'test-p7-6', data: validJobPayload() } as any;
-    await processor.process(jobData);
 
-    // Both jobs should have attempted upsert (both applications created)
-    expect(prisma.application.upsert).toHaveBeenCalledTimes(2);
+    await expect(processor.process(jobData)).rejects.toThrow('Anthropic API timeout');
 
-    // Only one score created (second job's scoring failed)
-    expect(prisma.candidateJobScore.create).toHaveBeenCalledTimes(1);
+    // Application should have been created (SCOR-02 happens before scoring)
+    expect(prisma.application.upsert).toHaveBeenCalledTimes(1);
 
-    // Final status should still be completed (error in scoring loop doesn't prevent completion)
+    // Score creation skipped due to error
+    expect(prisma.candidateJobScore.create).not.toHaveBeenCalled();
+
+    // Intake marked as failed before throwing
     expect(prisma.emailIntakeLog.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { processingStatus: 'completed' } }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          processingStatus: 'failed',
+          errorMessage: 'Anthropic API timeout',
+        }),
+      }),
     );
   });
 
