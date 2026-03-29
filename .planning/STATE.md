@@ -6,7 +6,7 @@ status: Executing Phase 13
 last_updated: "2026-03-26T17:59:30.676Z"
 last_activity: 2026-03-26
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 12
   total_plans: 32
   completed_plans: 31
@@ -65,6 +65,7 @@ Plan: 1 of 1
 - Phase 11 added: Review and validate API protocol MVP spec and implementation guide
 - Phase 12 discovered: Support add candidate from the UI (already planned)
 - Phase 13 added: Implement Kanban board with candidate hiring stage tracking
+- Phase 14 added: Wire OpenRouter extraction pipeline: email→LLM→dedup→scoring→UI
 
 ### Blockers
 
