@@ -1,25 +1,41 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { JobTitleMatcherService, JobTitleMatchResult } from './job-title-matcher.service';
 
-jest.mock('ai', () => ({
-  generateObject: jest.fn(),
+jest.mock('@openrouter/sdk', () => ({
+  OpenRouter: jest.fn(),
 }));
 
-jest.mock('@ai-sdk/anthropic', () => ({
-  anthropic: jest.fn(() => ({})),
-}));
-
-import { generateObject } from 'ai';
+import { OpenRouter } from '@openrouter/sdk';
 
 describe('JobTitleMatcherService', () => {
   let service: JobTitleMatcherService;
+  let configService: ConfigService;
+  let mockOpenRouter: jest.Mocked<OpenRouter>;
 
   beforeEach(async () => {
+    mockOpenRouter = {
+      callModel: jest.fn(),
+    } as unknown as jest.Mocked<OpenRouter>;
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [JobTitleMatcherService],
+      providers: [
+        JobTitleMatcherService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'OPENROUTER_API_KEY') return 'test-api-key';
+              return null;
+            }),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<JobTitleMatcherService>(JobTitleMatcherService);
+    configService = module.get<ConfigService>(ConfigService);
+    (OpenRouter as jest.Mock).mockReturnValue(mockOpenRouter);
     jest.clearAllMocks();
   });
 
@@ -30,13 +46,16 @@ describe('JobTitleMatcherService', () => {
   describe('matchJobTitles', () => {
     // Test 1: Similar roles with seniority variation
     it('should match "Software Developer" and "Senior Software Engineer" with high confidence', async () => {
-      (generateObject as jest.Mock).mockResolvedValueOnce({
-        object: {
-          matched: true,
-          confidence: 92,
-          reasoning: 'Both refer to software engineer roles; seniority differs but core skill set is the same',
-        },
-      });
+      const mockResponse = {
+        getText: jest.fn().mockResolvedValueOnce(
+          JSON.stringify({
+            matched: true,
+            confidence: 92,
+            reasoning: 'Both refer to software engineer roles; seniority differs but core skill set is the same',
+          })
+        ),
+      };
+      mockOpenRouter.callModel.mockReturnValueOnce(mockResponse as any);
 
       const result = await service.matchJobTitles(
         'Software Developer',
@@ -52,13 +71,16 @@ describe('JobTitleMatcherService', () => {
 
     // Test 2: Similar frontend specializations
     it('should match "Frontend Engineer" and "Senior Frontend Engineer" with high confidence', async () => {
-      (generateObject as jest.Mock).mockResolvedValueOnce({
-        object: {
-          matched: true,
-          confidence: 95,
-          reasoning: 'Both are frontend engineering roles; seniority level is the only difference',
-        },
-      });
+      const mockResponse = {
+        getText: jest.fn().mockResolvedValueOnce(
+          JSON.stringify({
+            matched: true,
+            confidence: 95,
+            reasoning: 'Both are frontend engineering roles; seniority level is the only difference',
+          })
+        ),
+      };
+      mockOpenRouter.callModel.mockReturnValueOnce(mockResponse as any);
 
       const result = await service.matchJobTitles(
         'Frontend Engineer',
@@ -73,13 +95,16 @@ describe('JobTitleMatcherService', () => {
 
     // Test 3: Unrelated roles
     it('should NOT match "Data Analyst" and "Software Developer"', async () => {
-      (generateObject as jest.Mock).mockResolvedValueOnce({
-        object: {
-          matched: false,
-          confidence: 15,
-          reasoning: 'Data Analyst focuses on data analysis; Software Developer focuses on software engineering',
-        },
-      });
+      const mockResponse = {
+        getText: jest.fn().mockResolvedValueOnce(
+          JSON.stringify({
+            matched: false,
+            confidence: 15,
+            reasoning: 'Data Analyst focuses on data analysis; Software Developer focuses on software engineering',
+          })
+        ),
+      };
+      mockOpenRouter.callModel.mockReturnValueOnce(mockResponse as any);
 
       const result = await service.matchJobTitles(
         'Data Analyst',
@@ -93,13 +118,16 @@ describe('JobTitleMatcherService', () => {
 
     // Test 4: Completely different domains
     it('should NOT match "Product Manager" and "DevOps Engineer"', async () => {
-      (generateObject as jest.Mock).mockResolvedValueOnce({
-        object: {
-          matched: false,
-          confidence: 5,
-          reasoning: 'Product Manager is a business/product role; DevOps Engineer is an infrastructure role',
-        },
-      });
+      const mockResponse = {
+        getText: jest.fn().mockResolvedValueOnce(
+          JSON.stringify({
+            matched: false,
+            confidence: 5,
+            reasoning: 'Product Manager is a business/product role; DevOps Engineer is an infrastructure role',
+          })
+        ),
+      };
+      mockOpenRouter.callModel.mockReturnValueOnce(mockResponse as any);
 
       const result = await service.matchJobTitles(
         'Product Manager',
@@ -113,9 +141,12 @@ describe('JobTitleMatcherService', () => {
 
     // Test 5: Graceful fallback on error
     it('should handle network errors gracefully', async () => {
-      (generateObject as jest.Mock).mockRejectedValueOnce(
-        new Error('Service unavailable')
-      );
+      const mockResponse = {
+        getText: jest.fn().mockRejectedValueOnce(
+          new Error('Service unavailable')
+        ),
+      };
+      mockOpenRouter.callModel.mockReturnValueOnce(mockResponse as any);
 
       const result = await service.matchJobTitles(
         'Software Developer',
