@@ -55,7 +55,7 @@ async function main() {
       niceToHaveSkills: ['Docker', 'Kubernetes', 'AWS'],
       expYearsMin: 5,
       expYearsMax: 10,
-      preferredOrgTypes: ['B2B SaaS', 'Startup', 'Enterprise'],
+      preferredOrgTypes: ['Agency', 'Startup', 'Corporate / Enterprise'],
     },
     {
       id: JOB_PM,
@@ -72,13 +72,12 @@ async function main() {
       roleSummary: 'Drive product strategy and roadmap for recruiting platform.',
       responsibilities:
         'Define product vision and roadmap, conduct user interviews, prioritize features, work with engineering and design, analyze metrics.',
-      whatWeOffer:
-        'Competitive salary, health insurance, equity, professional development, flexible hours.',
+      whatWeOffer: 'Competitive salary, health insurance, equity, professional development, flexible hours.',
       mustHaveSkills: ['Product Strategy', 'SQL', 'User Research'],
       niceToHaveSkills: ['Figma', 'Data Analysis'],
       expYearsMin: 3,
       expYearsMax: 7,
-      preferredOrgTypes: ['B2B SaaS', 'Marketplace'],
+      preferredOrgTypes: ['Startup', 'Corporate / Enterprise'],
     },
     {
       id: JOB_DS,
@@ -101,7 +100,7 @@ async function main() {
       niceToHaveSkills: ['PyTorch', 'Spark', 'dbt'],
       expYearsMin: 2,
       expYearsMax: 6,
-      preferredOrgTypes: ['B2B SaaS', 'AI/ML Company'],
+      preferredOrgTypes: ['Corporate / Enterprise', 'Non-profit'],
     },
   ];
 
