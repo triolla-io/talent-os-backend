@@ -90,6 +90,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 | 260324-c3g | Clean up ExtractionAgentService: remove ENABLE_AI_EXTRACTION flag, isolate callAI(), add 2 seed candidates | 2026-03-24 | 80645f8 | [260324-c3g-clean-up-extraction-agent-service-ts-for](./quick/260324-c3g-clean-up-extraction-agent-service-ts-for/) |
 | 260324-cbs | Commit unstaged changes: @openrouter/sdk swap, CandidateExtract snake_case field rename, Zod v4 fix, PROTOCOL.md | 2026-03-24 | a5c32c7 | [260324-cbs-commit-all-unsaved-changes-into-atomic-c](./quick/260324-cbs-commit-all-unsaved-changes-into-atomic-c/) |
 | 260324-dvq | Fix hiringStages guard in 10-02-PLAN.md: empty array [] now falls through to default seeding | 2026-03-24 | bc1cc8a | [260324-dvq-fix-seeding-loophole-in-plan-10-02-hirin](./quick/260324-dvq-fix-seeding-loophole-in-plan-10-02-hirin/) |
+| 260329-dot | Atomic commit of 9 pending file changes — consolidate phase 14 planning artifacts and replace superseded spec files | 2026-03-29 | fa4667f | [260329-dot-make-atomic-commit-of-9-pending-file-cha](./quick/260329-dot-make-atomic-commit-of-9-pending-file-cha/) |
 
 ### Todos
 
