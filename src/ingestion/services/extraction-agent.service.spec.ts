@@ -22,25 +22,80 @@ function makeService(): ExtractionAgentService {
   return new ExtractionAgentService(configService);
 }
 
+const defaultMetadata = { subject: 'Job Application', fromEmail: 'test@example.com' };
+
 describe('ExtractionAgentService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCallModel.mockReturnValue({ getText: mockGetText });
   });
 
-  // 4-01-02: AIEX-03 — optional fields can be null without schema errors
+  // Schema tests with new fields
   it('optional fields can be null', () => {
-    const partial: CandidateExtract = {
+    const partial = {
       full_name: 'John Smith',
       email: null,
       phone: null,
+      current_role: null,
+      years_experience: null,
+      location: null,
+      job_title_hint: null,
       skills: [],
       ai_summary: null,
-      suspicious: false,
+      source_hint: null,
     };
     expect(() =>
-      CandidateExtractSchema.parse({ ...partial }),
+      CandidateExtractSchema.parse(partial),
     ).not.toThrow();
+  });
+
+  it('years_experience is validated as integer', () => {
+    const parsed = CandidateExtractSchema.parse({
+      full_name: 'Test User',
+      email: null,
+      phone: null,
+      current_role: null,
+      years_experience: 6,
+      location: null,
+      job_title_hint: null,
+      skills: [],
+      ai_summary: null,
+      source_hint: null,
+    });
+    expect(parsed.years_experience).toBe(6);
+  });
+
+  it('source_hint enum validates correctly', () => {
+    const parsed = CandidateExtractSchema.parse({
+      full_name: 'Test User',
+      email: null,
+      phone: null,
+      current_role: null,
+      years_experience: null,
+      location: null,
+      job_title_hint: null,
+      skills: [],
+      ai_summary: null,
+      source_hint: 'linkedin',
+    });
+    expect(parsed.source_hint).toBe('linkedin');
+  });
+
+  it('source_hint rejects invalid enum values', () => {
+    expect(() =>
+      CandidateExtractSchema.parse({
+        full_name: 'Test User',
+        email: null,
+        phone: null,
+        current_role: null,
+        years_experience: null,
+        location: null,
+        job_title_hint: null,
+        skills: [],
+        ai_summary: null,
+        source_hint: 'invalid',
+      }),
+    ).toThrow();
   });
 
   // 4-01-05: AIEX-03 — skills defaults to empty array
@@ -49,8 +104,13 @@ describe('ExtractionAgentService', () => {
       full_name: 'Test User',
       email: null,
       phone: null,
+      current_role: null,
+      years_experience: null,
+      location: null,
+      job_title_hint: null,
       skills: [],
       ai_summary: null,
+      source_hint: null,
     });
     expect(parsed.skills).toEqual([]);
   });
@@ -61,18 +121,25 @@ describe('ExtractionAgentService', () => {
       full_name: 'Alice Smith',
       email: 'alice@example.com',
       phone: '+44-7700-900000',
+      current_role: 'Product Manager',
+      years_experience: 5,
+      location: 'London, UK',
+      job_title_hint: 'Product Manager',
       skills: ['Strategy', 'Roadmapping'],
       ai_summary: 'PM with 5 years experience. Skilled in roadmapping and stakeholder management.',
+      source_hint: 'direct',
     };
 
     mockGetText.mockResolvedValueOnce(JSON.stringify(aiResult));
 
     const service = makeService();
-    const result = await service.extract('some cv text', false);
+    const result = await service.extract('some cv text', false, defaultMetadata);
 
     expect(result.full_name).toBe('Alice Smith');
     expect(result.email).toBe('alice@example.com');
     expect(result.suspicious).toBe(false);
+    expect(result.current_role).toBe('Product Manager');
+    expect(result.years_experience).toBe(5);
   });
 
   // suspicious=true is propagated on success
@@ -81,49 +148,60 @@ describe('ExtractionAgentService', () => {
       full_name: 'Bob Jones',
       email: null,
       phone: null,
+      current_role: null,
+      years_experience: null,
+      location: null,
+      job_title_hint: null,
       skills: [],
       ai_summary: null,
+      source_hint: null,
     }));
 
     const service = makeService();
-    const result = await service.extract('some text', true);
+    const result = await service.extract('some text', true, defaultMetadata);
     expect(result.suspicious).toBe(true);
   });
 
-  // When getText rejects, returns safe fallback without throwing
-  it('returns safe fallback when getText rejects — does not throw', async () => {
+  // extract() THROWS on callAI() failure — no swallowing (Plan 14 fix)
+  it('extract() throws when callAI() (getText) fails — does not swallow', async () => {
     mockGetText.mockRejectedValueOnce(new Error('Network timeout'));
 
     const service = makeService();
-    const result = await service.extract('some text', false);
-
-    expect(result).toBeDefined();
-    expect(result.full_name).toBe('');
-    expect(result.email).toBeNull();
-    expect(result.phone).toBeNull();
-    expect(result.skills).toEqual([]);
-    expect(result.ai_summary).toBeNull();
-    expect(result.suspicious).toBe(false);
+    await expect(service.extract('some text', false, defaultMetadata)).rejects.toThrow('Network timeout');
   });
 
-  // Fallback shape passes CandidateExtractSchema.parse()
-  it('fallback shape satisfies CandidateExtractSchema', async () => {
-    mockGetText.mockRejectedValueOnce(new Error('AI failure'));
+  // extract() throws when schema validation fails
+  it('extract() throws when LLM output fails schema validation', async () => {
+    mockGetText.mockResolvedValueOnce(JSON.stringify({ invalid: 'data' }));
 
     const service = makeService();
-    const result = await service.extract('some text', false);
-
-    const { suspicious: _, ...schemaPart } = result;
-    expect(() => CandidateExtractSchema.parse(schemaPart)).not.toThrow();
+    await expect(service.extract('some text', false, defaultMetadata)).rejects.toThrow('LLM output validation failed');
   });
 
-  // suspicious flag propagates in fallback case too
-  it('propagates suspicious=true in fallback case', async () => {
-    mockGetText.mockRejectedValueOnce(new Error('Quota exceeded'));
+  // callAI includes metadata section in user message
+  it('callAI constructs userMessage with Email Metadata section', async () => {
+    const aiResult = {
+      full_name: 'Carol White',
+      email: 'carol@example.com',
+      phone: null,
+      current_role: null,
+      years_experience: null,
+      location: null,
+      job_title_hint: null,
+      skills: ['Python'],
+      ai_summary: 'Data scientist. Specialises in ML pipelines.',
+      source_hint: null,
+    };
+    mockGetText.mockResolvedValueOnce(JSON.stringify(aiResult));
 
     const service = makeService();
-    const result = await service.extract('some text', true);
-    expect(result.suspicious).toBe(true);
+    const metadata = { subject: 'Job Application for Data Scientist', fromEmail: 'carol@example.com' };
+    await service.extract('some cv text', false, metadata);
+
+    const callArgs = mockCallModel.mock.calls[0][0];
+    expect(callArgs.input).toContain('--- Email Metadata ---');
+    expect(callArgs.input).toContain('Subject: Job Application for Data Scientist');
+    expect(callArgs.input).toContain('From: carol@example.com');
   });
 
   // Strips markdown code fences if model wraps output
@@ -132,14 +210,35 @@ describe('ExtractionAgentService', () => {
       full_name: 'Carol White',
       email: 'carol@example.com',
       phone: null,
+      current_role: null,
+      years_experience: null,
+      location: null,
+      job_title_hint: null,
       skills: ['Python'],
       ai_summary: 'Data scientist. Specialises in ML pipelines.',
+      source_hint: null,
     };
 
     mockGetText.mockResolvedValueOnce('```json\n' + JSON.stringify(aiResult) + '\n```');
 
     const service = makeService();
-    const result = await service.extract('some cv text', false);
+    const result = await service.extract('some cv text', false, defaultMetadata);
     expect(result.full_name).toBe('Carol White');
+  });
+
+  // extractDeterministically() is public and returns null for new fields
+  it('extractDeterministically() is public and returns null for unextractable fields', () => {
+    const service = makeService();
+    const result = service.extractDeterministically('Dana Cohen\ndana@example.com\nI use TypeScript');
+
+    expect(result.current_role).toBeNull();
+    expect(result.years_experience).toBeNull();
+    expect(result.location).toBeNull();
+    expect(result.source_hint).toBeNull();
+    expect(result.job_title_hint).toBeNull();
+    expect(result.full_name).toBe('Dana Cohen');
+    expect(result.email).toBe('dana@example.com');
+    expect(result.skills).toContain('typescript');
+    expect(result.ai_summary).toContain('Deterministic extraction');
   });
 });
