@@ -14,6 +14,7 @@ export interface CandidateResponse {
   source_agency: string | null;
   created_at: Date;
   ai_score: number | null;
+  ai_summary: string | null;
   is_duplicate: boolean;
   skills: string[];
 
@@ -24,4 +25,10 @@ export interface CandidateResponse {
 
   // Job info for Talent Pool table
   job_title: string | null;
+
+  // New Profile data trackings
+  status: string;
+  is_rejected: boolean;
+  stage_summaries: Record<string, string>;
+  years_experience: number | null;
 }
