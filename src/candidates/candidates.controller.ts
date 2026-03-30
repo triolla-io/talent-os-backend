@@ -19,6 +19,8 @@ import { CandidatesService } from './candidates.service';
 import type { CandidateFilter } from './candidates.service';
 import { CreateCandidateSchema } from './dto/create-candidate.dto';
 import { UpdateCandidateStageSchema } from './dto/update-candidate-stage.dto';
+import { UpdateCandidateSchema } from './dto/update-candidate.dto';
+import { StageSummarySchema } from './dto/stage-summary.dto';
 import { CandidateResponse } from './dto/candidate-response.dto';
 
 @Controller('candidates')
@@ -108,6 +110,80 @@ export class CandidatesController {
   @HttpCode(204)
   async delete(@Param('id') id: string): Promise<void> {
     await this.candidatesService.deleteCandidate(id);
+  }
+
+  /**
+   * Update candidate profile fields and/or assign to a job pipeline.
+   * - If job_id is provided and candidate has no job: atomically creates Application and sets hiringStageId to first enabled stage.
+   * - If job_id matches existing assignment: no-op for that field.
+   * - If job_id differs from existing assignment: throws 400 ALREADY_ASSIGNED.
+   * - All other fields (full_name, email, phone, current_role, location, years_experience) are optional and updated independently.
+   * @returns Updated CandidateResponse
+   */
+  @Patch(':id')
+  async updateCandidate(@Param('id') id: string, @Body() body: unknown): Promise<CandidateResponse> {
+    const result = UpdateCandidateSchema.safeParse(body);
+    if (!result.success) {
+      throw new BadRequestException({
+        error: { code: 'VALIDATION_ERROR', message: 'Validation failed', details: this.formatZodErrors(result.error) },
+      });
+    }
+    return this.candidatesService.updateCandidate(id, result.data);
+  }
+
+  /**
+   * Reject a candidate — sets candidate.status = 'rejected' and updates their Application stage to 'rejected'.
+   * Idempotent: safe to call multiple times.
+   * @returns Updated CandidateResponse with is_rejected: true
+   */
+  @Post(':id/reject')
+  @HttpCode(200)
+  async rejectCandidate(@Param('id') id: string): Promise<CandidateResponse> {
+    return this.candidatesService.rejectCandidate(id);
+  }
+
+  /**
+   * Save or update a free-text summary for a specific hiring stage the candidate has gone through.
+   * Upserts the CandidateStageSummary record for the (candidateId, stageId) pair.
+   * The stage must belong to the candidate's currently assigned job.
+   * @returns { success: true }
+   */
+  @Post(':id/stages/:stage_id/summary')
+  @HttpCode(200)
+  async saveStageSummary(
+    @Param('id') id: string,
+    @Param('stage_id') stageId: string,
+    @Body() body: unknown,
+  ): Promise<{ success: boolean }> {
+    const result = StageSummarySchema.safeParse(body);
+    if (!result.success) {
+      throw new BadRequestException({
+        error: { code: 'VALIDATION_ERROR', message: 'Validation failed', details: this.formatZodErrors(result.error) },
+      });
+    }
+    return this.candidatesService.saveStageSummary(id, stageId, result.data.summary);
+  }
+
+  /**
+   * Composite action: saves the summary for the current stage AND advances the candidate to the next enabled hiring stage.
+   * Stages are ordered by `order` asc; the next stage after current_stage_id is selected.
+   * Throws 400 if candidate is already at the last stage.
+   * @returns { success: true, hiring_stage_id: string } — the new stage UUID
+   */
+  @Post(':id/stages/:stage_id/advance')
+  @HttpCode(200)
+  async advanceWithSummary(
+    @Param('id') id: string,
+    @Param('stage_id') stageId: string,
+    @Body() body: unknown,
+  ): Promise<{ success: boolean; hiring_stage_id: string }> {
+    const result = StageSummarySchema.safeParse(body);
+    if (!result.success) {
+      throw new BadRequestException({
+        error: { code: 'VALIDATION_ERROR', message: 'Validation failed', details: this.formatZodErrors(result.error) },
+      });
+    }
+    return this.candidatesService.advanceWithSummary(id, stageId, result.data.summary);
   }
 
   private formatZodErrors(error: ZodError): Record<string, string[]> {
