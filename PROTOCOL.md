@@ -47,6 +47,9 @@ Fetch candidates with optional search and filtering.
       "ai_score": 85,
       "is_duplicate": false,
       "skills": ["React", "TypeScript"],
+      "status": "active",
+      "is_rejected": false,
+      "stage_summaries": { "uuid": "Summary text for this stage" },
       "job_id": "uuid",
       "hiring_stage_id": "uuid",
       "hiring_stage_name": "Screening",
@@ -97,6 +100,9 @@ Fetch a single candidate by ID.
     "rest apis",
     "kubernetes"
   ],
+  "status": "active",
+  "is_rejected": false,
+  "stage_summaries": {},
   "job_id": "uuid",
   "hiring_stage_id": "uuid",
   "hiring_stage_name": "Screening",
@@ -166,6 +172,116 @@ Fetch a presigned S3 URL for a candidate's CV (valid for 1 hour).
   "cv_url": "https://..."
 }
 ```
+
+### `PATCH /candidates/:id`
+
+Update candidate profile fields and/or assign to a job pipeline.
+
+**Request Body:** All fields optional
+
+```json
+{
+  "job_id": "uuid",
+  "full_name": "Jane Smith",
+  "email": "jane@example.com",
+  "phone": "+1 555-0101",
+  "current_role": "Product Manager",
+  "location": "San Francisco",
+  "years_experience": 7
+}
+```
+
+**Behavior:**
+
+- If `job_id` is provided and candidate has no job: atomically creates Application and sets `hiringStageId` to first enabled stage.
+- If `job_id` matches existing assignment: no-op for that field.
+- If `job_id` differs from existing assignment: throws 400 ALREADY_ASSIGNED.
+- All other fields are optional and updated independently.
+
+**Response:** `200 OK` (returns full CandidateResponse)
+
+**Errors:**
+
+- `400 Bad Request` — validation failed or ALREADY_ASSIGNED
+- `400 No Stages` — job has no enabled hiring stages
+- `404 Not Found` — candidate not found
+
+### `POST /candidates/:id/reject`
+
+Reject a candidate — sets `candidate.status = 'rejected'` and updates their Application stage to 'rejected'. Idempotent: safe to call multiple times.
+
+**Request Body:** Empty object
+
+```json
+{}
+```
+
+**Response:** `200 OK` (returns full CandidateResponse with `is_rejected: true`)
+
+**Errors:**
+
+- `404 Not Found` — candidate not found
+
+### `POST /candidates/:id/stages/:stage_id/summary`
+
+Save or update a free-text summary for a specific hiring stage the candidate has gone through. Upserts the CandidateStageSummary record for the `(candidateId, stageId)` pair.
+
+**Path Parameters:**
+
+- `id`: Candidate UUID
+- `stage_id`: Hiring stage UUID (must belong to candidate's assigned job)
+
+**Request Body:**
+
+```json
+{
+  "summary": "Candidate showed strong technical skills and good communication. Recommended for next round."
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+**Errors:**
+
+- `404 Not Found` — candidate not found
+- `400 Bad Request` — candidate not assigned to a job, or stage does not belong to candidate's job
+
+### `POST /candidates/:id/stages/:stage_id/advance`
+
+Composite action: saves the summary for the current stage AND advances the candidate to the next enabled hiring stage. Stages are ordered by `order` asc; the next stage after `current_stage_id` is selected.
+
+**Path Parameters:**
+
+- `id`: Candidate UUID
+- `stage_id`: Current hiring stage UUID
+
+**Request Body:**
+
+```json
+{
+  "summary": "Ready to move to interview round."
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "hiring_stage_id": "uuid"
+}
+```
+
+**Errors:**
+
+- `404 Not Found` — candidate not found
+- `400 Bad Request` — candidate not assigned to a job, current stage not found, or candidate already at last stage
 
 ### `PATCH /candidates/:id/stage`
 
