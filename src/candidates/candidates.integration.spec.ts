@@ -94,10 +94,12 @@ function makeCandidatesController(
   mockStorageService: any = { uploadFromBuffer: jest.fn() },
 ) {
   const mockConfig = { get: jest.fn().mockReturnValue(TENANT_ID) };
+  const mockCandidateAiService = { generateSummary: jest.fn().mockResolvedValue('Mocked AI summary') };
   const service = new CandidatesService(
     mockPrisma as any,
     mockConfig as any,
     mockStorageService as any,
+    mockCandidateAiService as any,
   );
   return new CandidatesController(service);
 }
