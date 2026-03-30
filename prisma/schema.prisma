@@ -13,14 +13,15 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   // Relations
-  jobs               Job[]
-  candidates         Candidate[]
-  applications       Application[]
-  scores             CandidateJobScore[]
-  duplicateFlags     DuplicateFlag[]
-  emailIntakeLogs    EmailIntakeLog[]
-  jobStages          JobStage[]
-  screeningQuestions ScreeningQuestion[]
+  jobs                    Job[]
+  candidates              Candidate[]
+  applications            Application[]
+  scores                  CandidateJobScore[]
+  duplicateFlags          DuplicateFlag[]
+  emailIntakeLogs         EmailIntakeLog[]
+  jobStages               JobStage[]
+  screeningQuestions      ScreeningQuestion[]
+  candidateStageSummaries CandidateStageSummary[]
 
   @@map("tenants")
 }
@@ -82,22 +83,23 @@ model Candidate {
   sourceEmail     String?  @map("source_email") @db.Text
   aiSummary       String?  @map("ai_summary") @db.Text
   metadata        Json?    @db.JsonB
+  status          String   @default("active") @db.Text // "active", "rejected"
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  tenant          Tenant           @relation(fields: [tenantId], references: [id])
-  job             Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  hiringStage     JobStage?        @relation("CandidateHiringStage", fields: [hiringStageId], references: [id], onDelete: SetNull)
-  applications    Application[]
-  duplicateFlags  DuplicateFlag[]  @relation("CandidateFlags")
-  matchedIn       DuplicateFlag[]  @relation("MatchedCandidateFlags")
-  emailIntakeLogs EmailIntakeLog[]
+  tenant                  Tenant                  @relation(fields: [tenantId], references: [id])
+  job                     Job?                    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  hiringStage             JobStage?               @relation("CandidateHiringStage", fields: [hiringStageId], references: [id], onDelete: SetNull)
+  applications            Application[]
+  duplicateFlags          DuplicateFlag[]         @relation("CandidateFlags")
+  matchedIn               DuplicateFlag[]         @relation("MatchedCandidateFlags")
+  emailIntakeLogs         EmailIntakeLog[]
+  candidateStageSummaries CandidateStageSummary[]
 
   // Indexes
   @@index([tenantId, jobId], name: "idx_candidates_tenant_job")
   @@index([tenantId, jobId, hiringStageId], name: "idx_candidates_tenant_job_stage")
-
   // Unique email per tenant (partial — only when email is not null, enforced via raw SQL index)
   @@map("candidates")
 }
@@ -132,16 +134,16 @@ model Application {
 
 // ─── candidate_job_scores ─────────────────────────────────────────────────────
 model CandidateJobScore {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId           String   @map("tenant_id") @db.Uuid
-  applicationId      String   @map("application_id") @db.Uuid
-  score              Int      @db.SmallInt
-  reasoning          String?  @db.Text
-  strengths          String[] @default([])
-  gaps               String[] @default([])
-  modelUsed          String   @map("model_used") @db.Text
-  matchConfidence    Decimal? @map("match_confidence") @db.Decimal(3, 2) // Phase 6.5: Track semantic job title match confidence
-  scoredAt           DateTime @default(now()) @map("scored_at") @db.Timestamptz
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  applicationId   String   @map("application_id") @db.Uuid
+  score           Int      @db.SmallInt
+  reasoning       String?  @db.Text
+  strengths       String[] @default([])
+  gaps            String[] @default([])
+  modelUsed       String   @map("model_used") @db.Text
+  matchConfidence Decimal? @map("match_confidence") @db.Decimal(3, 2) // Phase 6.5: Track semantic job title match confidence
+  scoredAt        DateTime @default(now()) @map("scored_at") @db.Timestamptz
 
   // Relations
   tenant      Tenant      @relation(fields: [tenantId], references: [id])
@@ -211,10 +213,11 @@ model JobStage {
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
-  job          Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  applications Application[]
-  candidates   Candidate[]   @relation("CandidateHiringStage")
+  tenant                  Tenant                  @relation(fields: [tenantId], references: [id])
+  job                     Job                     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applications            Application[]
+  candidates              Candidate[]             @relation("CandidateHiringStage")
+  candidateStageSummaries CandidateStageSummary[]
 
   @@index([jobId, order], name: "idx_job_stages_job_order")
   @@map("job_stages")
@@ -240,4 +243,23 @@ model ScreeningQuestion {
 
   @@index([jobId], name: "idx_screening_questions_job")
   @@map("screening_questions")
+}
+
+// ─── candidate_stage_summaries ────────────────────────────────────────────────
+model CandidateStageSummary {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  candidateId String   @map("candidate_id") @db.Uuid
+  jobStageId  String   @map("job_stage_id") @db.Uuid
+  summary     String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobStage  JobStage  @relation(fields: [jobStageId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, jobStageId], name: "idx_cand_stage_summary")
+  @@map("candidate_stage_summaries")
 }
