@@ -1,6 +1,6 @@
 # Phase 17: Production Deployment Readiness — Context
 
-**Gathered:** 2026-03-31
+**Gathered:** 2026-03-31 (updated 2026-03-31 — added Domain/SSL and Jenkins parameterized build)
 **Status:** Ready for planning
 
 <domain>
@@ -31,16 +31,19 @@ Close out the v1.0 milestone by hardening the codebase for production: fix all f
 - **D-03:** `make up` auto-migrates. Seed is separate (`make seed`). `make reset` for clean-slate testing.
 
 ### CI/CD Pipeline (Jenkins)
-- **D-04:** Create a `Jenkinsfile` at project root with stages: **Build → Test** only (no auto-deploy). Deploy is a manual human action.
+- **D-04:** Create a `Jenkinsfile` at project root as a **parameterized build**. Parameters:
+  - `BRANCH_NAME` (string, default: `main`) — the branch to pull, build, and test. Allows running the pipeline against any branch (feature, release, staging) without editing the Jenkinsfile.
+  - Stages: **Build → Test** only (no auto-deploy). Deploy remains a manual human action.
 - **D-05:** Pipeline stages:
-  1. `npm ci`
-  2. `npm run build`
-  3. `npm run test` (unit tests must pass as CI gate)
-  4. `docker build` (verifies the image builds cleanly)
+  1. `git checkout $BRANCH_NAME`
+  2. `npm ci`
+  3. `npm run build`
+  4. `npm run test` (unit tests must pass as CI gate)
+  5. `docker build` (verifies the image builds cleanly)
 - **D-06:** Secrets managed via environment-specific `.env` files on the server (`.env.prod`, `.env.stage` when infra exists). Not in git. Jenkins does not inject secrets.
 - **D-07:** Migrations run via `make migrate-prod` — a separate explicit Makefile target, never automatic on container start. Human triggers it before/after deploy.
-- **D-08:** Jenkinsfile supports `prod` only for now. Stage/QA added later when those servers exist.
-- **D-09:** Create `scripts/deploy.sh` — SSH to Hetzner, `git pull`, `docker compose -f docker-compose.yml up -d --build`. Referenced from Jenkinsfile but not auto-triggered by CI.
+- **D-08:** `BRANCH_NAME` parameter enables staging deployments without a separate Jenkinsfile. Default `main` targets prod. Specify a feature or release branch to validate a staging build. Stage server provisioning is out of scope for Phase 17 — the Jenkinsfile just needs to support it structurally.
+- **D-09:** Create `scripts/deploy.sh` — SSH to Hetzner, `git pull origin $BRANCH_NAME`, `docker compose -f docker-compose.yml up -d --build`. Accepts branch as argument. Referenced from Jenkinsfile but not auto-triggered by CI.
 
 ### Test Coverage
 - **D-10:** All currently-failing unit tests must be fixed (6 modified files from Phase 16 work, including `ingestion.processor.spec.ts`).
@@ -78,6 +81,18 @@ Close out the v1.0 milestone by hardening the codebase for production: fix all f
 ### Database Backups
 - **D-25:** `make backup` runs `pg_dump` inside the postgres container, saves to `./backups/YYYY-MM-DD_HH-MM.sql.gz`. The `backups/` directory is gitignored.
 - **D-26:** `make restore BACKUP=./backups/dump.sql.gz` drops and re-creates the DB from a dump file. Documented for disaster recovery drills.
+
+### Domain & SSL / Reverse Proxy
+- **D-33:** Add an **Nginx** service to `docker-compose.yml` as the reverse proxy (not Traefik — simpler ops, more widely understood). In prod, the `api` service must NOT expose port 3000 directly to the host — only nginx faces the internet.
+- **D-34:** Nginx configuration (`nginx/nginx.conf`):
+  - Port 80: HTTP → HTTPS redirect (301) for all requests
+  - Port 443: TLS termination, proxy to `api:3000`
+  - Include `proxy_set_header` for `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto` so NestJS sees correct client IP
+  - `client_max_body_size 10m` (CV attachments can be several MB)
+- **D-35:** TLS certificates via **Let's Encrypt + certbot** (official `certbot/certbot` Docker image). Certbot runs as a companion container using the webroot challenge via a shared volume. Certificates stored in `/etc/letsencrypt` volume, mounted into the nginx container.
+- **D-36:** Create `scripts/setup-ssl.sh` — initial one-time cert provisioning script. Accepts domain name and email as arguments. Documents the exact certbot command so the server operator doesn't need to figure it out.
+- **D-37:** Add certbot renewal to docker-compose.yml as a `certbot` service with `entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'` (standard Let's Encrypt renewal pattern).
+- **D-38:** Add `make ssl-setup DOMAIN=example.com EMAIL=admin@example.com` Makefile target that runs `scripts/setup-ssl.sh`.
 
 ### Container Resource Limits
 - **D-27:** Set memory/CPU limits in `docker-compose.yml` (prod) for Hetzner CX21 (2 vCPU, 4GB RAM):
@@ -118,10 +133,14 @@ Close out the v1.0 milestone by hardening the codebase for production: fix all f
 - `PROTOCOL.md` — Full REST API contract. Every endpoint response shape, field names, status codes. D-19 requires alignment verification against this file.
 
 ### Infrastructure
-- `docker-compose.yml` — Production compose (to add resource limits, healthcheck, restart policies)
+- `docker-compose.yml` — Production compose (to add nginx service, resource limits, healthcheck, restart policies, certbot)
 - `docker-compose.dev.yml` — Dev compose (Makefile wraps this for local workflow)
 - `Dockerfile` — Multi-stage build (builder + runner). Already working; verify healthcheck CMD added.
 - `.env.example` — All required environment variables. Reference for README env vars table.
+
+### Reverse Proxy & SSL (new files to create)
+- `nginx/nginx.conf` — Nginx reverse proxy config: HTTP→HTTPS redirect, TLS termination, proxy to api:3000
+- `scripts/setup-ssl.sh` — Initial Let's Encrypt cert provisioning script (certbot webroot challenge)
 
 ### Tests (current state)
 - `src/ingestion/ingestion.processor.spec.ts` — Heavily modified in Phase 16 (174 lines changed). Primary failing test file to fix.
@@ -174,6 +193,8 @@ No external specs beyond PROTOCOL.md — requirements are captured in decisions 
 - Migrations must NEVER run automatically on prod container start — only via explicit `make migrate-prod` human action.
 - Jenkins pipeline is Build → Test only. No auto-deploy in Phase 17. Deploy remains a manual SSH action.
 - CORS should default-deny (API only talks to Postmark webhooks, no browser clients in Phase 1).
+- **Nginx + Let's Encrypt is non-negotiable:** Postmark requires HTTPS to deliver webhook payloads. Without SSL, the entire pipeline doesn't function. This is not ops polish — it is a functional requirement.
+- **Jenkins `BRANCH_NAME` parameter:** Primary use case is staging validation — run tests against a release/feature branch before manual deploy. Avoids needing a second Jenkinsfile or separate Jenkins job per environment.
 
 </specifics>
 
@@ -181,8 +202,8 @@ No external specs beyond PROTOCOL.md — requirements are captured in decisions 
 ## Deferred Ideas
 
 - **Sentry error monitoring** — PROJECT.md mentions it as recommended but non-blocking. Not in Phase 17 scope.
-- **Hetzner VPS setup / Jenkins server configuration** — Phase 17 produces artifacts (Jenkinsfile, deploy.sh) but does not provision servers.
-- **Stage / QA environments** — Jenkinsfile supports prod only. Stage/QA added when those servers exist.
+- **Hetzner VPS setup / Jenkins server configuration** — Phase 17 produces artifacts (Jenkinsfile, deploy.sh, nginx.conf, setup-ssl.sh) but does not provision servers.
+- **Stage / QA server provisioning** — Jenkinsfile now accepts any `BRANCH_NAME` (structural support added). Actual staging server setup deferred to when that infra exists.
 - **Automated cron backup to R2** — Phase 17 adds `make backup` (manual). Automated scheduled backup is Phase 2+ ops work.
 - **Bulk assignment endpoint** — Deferred from Phase 16.
 - **Environment file strategy (.env.local.example, .env.prod.example)** — Not discussed; `.env.example` covers both. If needed, add in a future ops phase.
