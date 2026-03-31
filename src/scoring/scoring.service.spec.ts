@@ -1,6 +1,5 @@
 import { ConfigService } from '@nestjs/config';
 import { ScoringAgentService, ScoreSchema, ScoringInput } from './scoring.service';
-import { JobTitleMatcherService } from './job-title-matcher.service';
 
 // Mock @openrouter/sdk so tests don't hit real network
 const mockGetText = jest.fn();
@@ -16,10 +15,7 @@ function makeService(): ScoringAgentService {
   const configService = {
     get: jest.fn().mockReturnValue('fake-openrouter-key'),
   } as unknown as ConfigService;
-  const jobTitleMatcher = {
-    matchJobTitles: jest.fn().mockResolvedValue({ matched: true, confidence: 0.95 }),
-  } as unknown as JobTitleMatcherService;
-  return new ScoringAgentService(configService, jobTitleMatcher);
+  return new ScoringAgentService(configService);
 }
 
 const validScoreResponse = JSON.stringify({

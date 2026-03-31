@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OpenRouter } from '@openrouter/sdk';
 import { z } from 'zod';
-import { JobTitleMatcherService } from './job-title-matcher.service';
 
 export const ScoreSchema = z.object({
   score: z.number().int().min(0).max(100),
@@ -61,7 +60,6 @@ export class ScoringAgentService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly jobTitleMatcher: JobTitleMatcherService,
   ) {}
 
   async scoreWithJobTitleMatch(
