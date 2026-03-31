@@ -41,15 +41,13 @@ export class CandidatesService {
     // Build WHERE conditions
     const where: Prisma.CandidateWhereInput = { tenantId };
 
-    // ── NEW: filter by job ──────────────────────────────────────────────
+    // ── filter by job ──────────────────────────────────────────────
     if (jobId) {
       where.jobId = jobId;
     }
 
-    // Exclude rejected candidates for available pool AND kanban board
-    if (filter === 'available' || (!filter && jobId)) {
-      where.status = { not: 'rejected' };
-    }
+    // Always exclude rejected candidates from the talent pool and kanban board
+    where.status = { not: 'rejected' };
 
     if (q) {
       where.OR = [
