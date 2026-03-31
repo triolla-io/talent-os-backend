@@ -62,39 +62,6 @@ export class ScoringAgentService {
     private readonly config: ConfigService,
   ) {}
 
-  async scoreWithJobTitleMatch(
-    input: ScoringInput,
-    tenantId: string,
-  ): Promise<ScoringWithMatchResult> {
-    // Step 1: Check semantic job title match first
-    const candidateJobTitle = input.candidateFields.currentRole || '';
-    const positionJobTitle = input.job.title;
-
-    const titleMatch = await this.jobTitleMatcher.matchJobTitles(
-      candidateJobTitle,
-      positionJobTitle,
-      tenantId,
-    );
-
-    if (!titleMatch.matched) {
-      this.logger.debug(
-        `Job title mismatch: "${candidateJobTitle}" vs "${positionJobTitle}"`,
-      );
-      return {
-        matched: false,
-        matchConfidence: titleMatch.confidence,
-      };
-    }
-
-    // Step 2: If matched, proceed with scoring
-    const scoreResult = await this.score(input);
-    return {
-      matched: true,
-      matchConfidence: titleMatch.confidence,
-      score: scoreResult,
-    };
-  }
-
   async score(input: ScoringInput): Promise<ScoreResult & { modelUsed: string }> {
     const apiKey = this.config.get<string>('OPENROUTER_API_KEY')!;
     const client = new OpenRouter({ apiKey });
