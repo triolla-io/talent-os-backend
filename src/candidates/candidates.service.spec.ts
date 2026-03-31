@@ -4,6 +4,8 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { CandidatesService } from './candidates.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { ScoringAgentService } from '../scoring/scoring.service';
+import { CandidateAiService } from './candidate-ai.service';
 
 const TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -17,6 +19,7 @@ function mockCandidate(overrides: Partial<{
   location: string | null;
   cvFileUrl: string | null;
   source: string;
+  sourceAgency: string | null;
   createdAt: Date;
   skills: string[];
   jobId: string | null;
@@ -24,6 +27,9 @@ function mockCandidate(overrides: Partial<{
   hiringStage: { name: string } | null;
   applications: { scores: { score: number }[] }[];
   duplicateFlags: { id: string }[];
+  candidateStageSummaries: { jobStageId: string; summary: string }[];
+  status: string;
+  aiSummary: string | null;
 }> = {}) {
   return {
     id: 'cand-1',
@@ -34,6 +40,7 @@ function mockCandidate(overrides: Partial<{
     location: 'Tel Aviv',
     cvFileUrl: 'https://r2.example.com/cv.pdf',
     source: 'linkedin',
+    sourceAgency: null,
     createdAt: new Date('2026-01-01T00:00:00Z'),
     skills: ['TypeScript', 'React'],
     jobId: 'job-uuid',
@@ -41,6 +48,9 @@ function mockCandidate(overrides: Partial<{
     hiringStage: { name: 'Application Review' },
     applications: [],
     duplicateFlags: [],
+    candidateStageSummaries: [],
+    status: 'active',
+    aiSummary: null,
     ...overrides,
   };
 }
@@ -66,6 +76,8 @@ describe('CandidatesService', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: ConfigService, useValue: configMock },
         { provide: StorageService, useValue: { uploadFromBuffer: jest.fn() } },
+        { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 75, reasoning: 'Test', strengths: [], gaps: [], modelUsed: 'test' }) } },
+        { provide: CandidateAiService, useValue: { generateSummary: jest.fn().mockResolvedValue('Test summary') } },
       ],
     }).compile();
 
