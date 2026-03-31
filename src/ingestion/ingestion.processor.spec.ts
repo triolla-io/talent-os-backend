@@ -711,14 +711,12 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
     );
   });
 
-  describe('IngestionProcessor — Phase 6.5 Job Matching (Phase 14 Fix)', () => {
+  describe('IngestionProcessor — Phase 15 Deterministic Job ID Routing', () => {
     let processor: IngestionProcessor;
     let prisma: any;
     let extractionAgent: any;
-    let jobTitleMatcher: { matchJobTitles: jest.Mock };
 
-    const job1 = { id: 'job-1', title: 'Full Stack Engineer', status: 'active', hiringStages: [{ id: 'stage-1' }] };
-    const job2 = { id: 'job-2', title: 'Backend Developer', status: 'active', hiringStages: [{ id: 'stage-2' }] };
+    const job1 = { id: 'job-1', title: 'Senior Software Engineer', shortId: 'SSE-1', description: null, requirements: [], hiringStages: [{ id: 'stage-1' }] };
 
     beforeEach(async () => {
       const txClient = { emailIntakeLog: { update: jest.fn().mockResolvedValue({}) } };
@@ -726,20 +724,11 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
         emailIntakeLog: { update: jest.fn().mockResolvedValue({}) },
         $transaction: jest.fn().mockImplementation(async (cb) => cb(txClient)),
         candidate: { update: jest.fn().mockResolvedValue({}) },
-        job: { findMany: jest.fn().mockResolvedValue([job1, job2]), findFirst: jest.fn() },
+        job: { findUnique: jest.fn().mockResolvedValue(job1), findFirst: jest.fn() },
         application: { upsert: jest.fn().mockResolvedValue({ id: 'app-1' }) },
         candidateJobScore: { create: jest.fn().mockResolvedValue({}) },
       };
-      extractionAgent = { extract: jest.fn().mockResolvedValue({ ...mockCandidateExtract(), job_title_hint: 'Full Stack Developer' }) };
-      // Default: job1 (Full Stack Engineer) matches with high confidence; job2 (Backend Developer) does not
-      jobTitleMatcher = {
-        matchJobTitles: jest.fn().mockImplementation((_candidate: string, positionTitle: string) => {
-          if (positionTitle === 'Full Stack Engineer') {
-            return Promise.resolve({ matched: true, confidence: 0.85, reasoning: 'Semantic match' });
-          }
-          return Promise.resolve({ matched: false, confidence: 0.3, reasoning: 'Low match' });
-        }),
-      };
+      extractionAgent = { extract: jest.fn().mockResolvedValue(mockCandidateExtract()) };
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -752,17 +741,25 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
           { provide: StorageService, useValue: { upload: jest.fn().mockResolvedValue('key') } },
           { provide: DedupService, useValue: { check: jest.fn().mockResolvedValue(null), insertCandidate: jest.fn().mockResolvedValue('cand-1') } },
           { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, modelUsed: 'test' }) } },
-          { provide: JobTitleMatcherService, useValue: jobTitleMatcher },
+          { provide: JobTitleMatcherService, useValue: { matchJobTitles: jest.fn() } },
         ],
       }).compile();
       processor = module.get<IngestionProcessor>(IngestionProcessor);
     });
 
-    it('matches the first job with confidence > 0.7 (Full Stack Developer matched to Full Stack Engineer)', async () => {
-      const job = { id: 'test-match-1', data: mockPostmarkPayload({ TextBody: 'a'.repeat(101) }) } as any;
+    it('extracts Job ID from subject and matches by shortId', async () => {
+      const job = { id: 'test-match-1', data: mockPostmarkPayload({ Subject: '[Job ID: SSE-1] CV Submission', TextBody: 'a'.repeat(101) }) } as any;
       await processor.process(job);
 
-      // Should pick job1 because "Full Stack Developer" vs "Full Stack Engineer" returns confidence 0.85 > 0.7
+      // Should find job by shortId
+      expect(prisma.job.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            idx_job_short_id_tenant: { tenantId: 'test-tenant-id', shortId: 'SSE-1' },
+          }),
+        }),
+      );
+      // Should assign job
       expect(prisma.candidate.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ jobId: 'job-1' }),
@@ -770,14 +767,12 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
       );
     });
 
-    it('proceeds with null jobId and skips scoring if no match meets threshold', async () => {
-      extractionAgent.extract.mockResolvedValueOnce({ ...mockCandidateExtract(), job_title_hint: 'Accountant' });
-      // Override: all jobs return low confidence for "Accountant"
-      jobTitleMatcher.matchJobTitles.mockResolvedValue({ matched: false, confidence: 0.1, reasoning: 'No match' });
-      const job = { id: 'test-match-2', data: mockPostmarkPayload({ TextBody: 'a'.repeat(101) }) } as any;
+    it('proceeds with null jobId and skips scoring if no Job ID in subject', async () => {
+      prisma.job.findUnique.mockResolvedValueOnce(null);
+      const job = { id: 'test-match-2', data: mockPostmarkPayload({ Subject: 'CV Submission', TextBody: 'a'.repeat(101) }) } as any;
       await processor.process(job);
 
-      // Should not match "Accountant" to either engineer job
+      // Should not find job
       expect(prisma.candidate.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ jobId: null }),
@@ -788,7 +783,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
         expect.objectContaining({ data: { processingStatus: 'completed' } }),
       );
       // Scoring skipped
-      expect(prisma.job.findMany).toHaveBeenCalledTimes(1); // Only once for matching
+      expect(prisma.application.upsert).not.toHaveBeenCalled();
     });
   });
 });

@@ -11,7 +11,6 @@ import { ExtractionAgentService, CandidateExtract } from './services/extraction-
 import { StorageService } from '../storage/storage.service';
 import { DedupService, DedupResult } from '../dedup/dedup.service';
 import { ScoringAgentService, ScoringInput } from '../scoring/scoring.service';
-import { JobTitleMatcherService } from '../scoring/job-title-matcher.service';
 
 export interface ProcessingContext {
   fullText: string;
@@ -38,9 +37,17 @@ export class IngestionProcessor extends WorkerHost {
     private readonly storageService: StorageService,
     private readonly dedupService: DedupService,
     private readonly scoringService: ScoringAgentService,
-    private readonly jobTitleMatcher: JobTitleMatcherService,
   ) {
     super();
+  }
+
+  private extractJobIdFromSubject(subject: string | null | undefined): string | null {
+    if (!subject) {
+      return null;
+    }
+    // D-01, D-03: Case-insensitive regex matching [Job ID: ...], [JID: ...], etc.
+    const match = subject.match(/\[(?:Job\s*ID|JID):\s*([a-zA-Z0-9\-]+)\]/i);
+    return match ? match[1] : null;
   }
 
   async process(job: Job<PostmarkPayloadDto>): Promise<void> {
@@ -216,12 +223,20 @@ export class IngestionProcessor extends WorkerHost {
 
     this.logger.log(`Phase 6 complete for MessageID: ${payload.MessageID} — candidateId: ${candidateId}`);
 
-    // Phase 6.5: Semantic job title matching (early-exit on first confident match)
+    // Phase 15: Deterministic Job ID extraction + lookup (replaces Phase 6.5 semantic matching)
+    const jobIdFromSubject = this.extractJobIdFromSubject(payload.Subject);
+
     let matchedJob: { id: string; title: string; description: string | null; requirements: string[]; hiringStages: { id: string }[] } | null = null;
 
-    if (extraction!.job_title_hint) {
-      const activeJobs = await this.prisma.job.findMany({
-        where: { tenantId, status: 'open' },
+    if (jobIdFromSubject) {
+      // D-08: Look up Job by (shortId, tenantId)
+      const jobByShortId = await this.prisma.job.findUnique({
+        where: {
+          idx_job_short_id_tenant: {
+            tenantId,
+            shortId: jobIdFromSubject,
+          },
+        },
         select: {
           id: true,
           title: true,
@@ -235,38 +250,27 @@ export class IngestionProcessor extends WorkerHost {
         },
       });
 
-      for (const job of activeJobs) {
-        const matchResult = await this.jobTitleMatcher.matchJobTitles(
-          extraction!.job_title_hint,
-          job.title,
-          tenantId,
+      if (jobByShortId) {
+        matchedJob = jobByShortId;
+        this.logger.log(
+          `Phase 15: Job ID "${jobIdFromSubject}" from subject matched job "${jobByShortId.title}"`,
         );
-
-        if (matchResult.confidence > 0.7) {
-          matchedJob = job;
-          this.logger.log(
-            `Phase 6.5: matched job "${job.title}" with confidence ${matchResult.confidence.toFixed(2)} — ${matchResult.reasoning ?? ''}`,
-          );
-          break; // Early exit — first confident match wins, saves API calls
-        }
-      }
-
-      if (!matchedJob) {
+      } else {
+        // D-09: Job not found by shortId
         this.logger.warn(
-          `Phase 6.5: no active job matched title hint "${extraction!.job_title_hint}" above confidence threshold 0.7`,
+          `Phase 15: Job ID "${jobIdFromSubject}" from subject not found for MessageID: ${payload.MessageID}`,
         );
       }
+    } else {
+      // D-10: No Job ID in subject
+      this.logger.debug(
+        `Phase 15: No Job ID found in subject for MessageID: ${payload.MessageID}`,
+      );
     }
 
     // Determine final job/stage for enrichment
     const jobId = matchedJob?.id ?? null;
     const hiringStageId = matchedJob?.hiringStages[0]?.id ?? null;
-
-    if (!matchedJob) {
-      this.logger.warn(
-        `No active job found matching title hint "${extraction!.job_title_hint}" for MessageID: ${payload.MessageID} — proceeding with unassigned candidate`,
-      );
-    }
 
     // Phase 7: Candidate enrichment (CAND-01, D-01, D-02, D-03)
     // ALWAYS enrich candidate fields, even if no job matched

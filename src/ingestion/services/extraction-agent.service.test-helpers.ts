@@ -10,10 +10,10 @@ export function mockCandidateExtract(
     current_role: 'Senior Software Engineer',
     years_experience: 7,
     location: 'Tel Aviv, Israel',
-    job_title_hint: 'Senior Backend Developer',
     skills: ['TypeScript', 'Node.js', 'PostgreSQL'],
     ai_summary: 'Experienced engineer with 7 years building TypeScript backends. Strong in distributed systems and database design.',
     source_hint: 'direct',
+    source_agency: null,
     suspicious: false,
     ...overrides,
   };

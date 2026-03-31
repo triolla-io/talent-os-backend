@@ -86,11 +86,21 @@ export class JobsService {
       order: q.order ?? i + 1,
     }));
 
+    // Generate shortId: extract first letters of title words + random suffix
+    const titleWords = dto.title.split(/\s+/).filter((w) => w.length > 0);
+    const prefix = titleWords
+      .map((word) => word.charAt(0).toUpperCase())
+      .join('')
+      .substring(0, 10); // Cap at 10 chars
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const shortId = `${prefix}-${randomSuffix}`;
+
     return this.prisma.$transaction(async (tx) => {
       const job = await tx.job.create({
         data: {
           tenantId,
           title: dto.title,
+          shortId,
           description: dto.description ?? null,
           department: dto.department ?? null,
           location: dto.location ?? null,

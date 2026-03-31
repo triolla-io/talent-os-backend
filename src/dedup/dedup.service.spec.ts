@@ -13,10 +13,10 @@ export function mockCandidateDedupExtract(
     current_role: 'Software Engineer',
     years_experience: 5,
     location: 'Tel Aviv, Israel',
-    job_title_hint: 'Backend Developer',
     skills: ['TypeScript', 'Node.js'],
     ai_summary: 'Experienced engineer.',
     source_hint: null,
+    source_agency: null,
     suspicious: false,
     ...overrides,
   };
