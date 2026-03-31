@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -8,7 +9,10 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
     bodyParser: true,
+    bufferLogs: true,
   });
+
+  app.useLogger(app.get(Logger));
 
   // Postmark sends CV attachments as base64 inside JSON — a 2 MB PDF becomes ~2.7 MB.
   // Default Express limit is 100 KB which rejects most real CVs.

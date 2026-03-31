@@ -1,25 +1,38 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
 describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
     await app.init();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('GET /api/health returns 200 or 503 with correct shape', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/health')
+      .expect((res) => {
+        // Accept both 200 (ok) and 503 (degraded — DB/Redis not running in CI)
+        expect([200, 503]).toContain(res.status);
+      });
+
+    expect(response.body).toHaveProperty('status');
+    expect(response.body).toHaveProperty('checks');
+    expect(response.body).toHaveProperty('uptime');
+    expect(response.body.checks).toHaveProperty('database');
+    expect(response.body.checks).toHaveProperty('redis');
+    expect(['ok', 'degraded']).toContain(response.body.status);
   });
 });
