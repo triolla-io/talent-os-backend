@@ -1,7 +1,7 @@
 # Roadmap: Triolla Talent OS — Backend (Phase 1)
 
 **Created:** 2026-03-22
-**Phases:** 14
+**Phases:** 16
 **Granularity:** Standard
 **Coverage:** 40/40 v1 requirements mapped
 
@@ -18,6 +18,11 @@
 - [x] **Phase 9: Create client-facing REST API endpoints** - GET /api/candidates, /jobs, /applications endpoints (completed 2026-03-23)
 - [x] **Phase 10: Add job creation feature** - POST /api/jobs with atomic nested creation and default seeding (completed 2026-03-24)
 - [x] **Phase 11: API Protocol MVP Implementation** - Complete job management endpoints with full validation and testing (completed 2026-03-25)
+- [ ] **Phase 12: Support add candidate from the UI** - Direct candidate creation endpoint (planned 2026-03-26)
+- [ ] **Phase 13: Implement Kanban board with candidate hiring stage tracking** - Visual pipeline UI (planned 2026-03-26)
+- [x] **Phase 14: Wire OpenRouter extraction pipeline** - Replace mock extraction with real LLM calls (completed 2026-03-29)
+- [x] **Phase 15: Migrate email ingestion to deterministic Job ID routing** - Regex + shortId lookup, remove semantic matching (completed 2026-03-31)
+- [ ] **Phase 16: Backend Support for Manual Routing & UI Parity** - Manual job assignment API, expose shortId/sourceAgency in responses (planned 2026-03-31)
 
 ## Phase Details
 
@@ -251,23 +256,6 @@ Plans:
 Plans:
 - [x] 11-01-PLAN.md — Schema migrations (JobStage+ScreeningQuestion), GET /config endpoint, Jobs endpoints (GET/POST/PUT/DELETE), validation, error handling, 195 tests passing
 
-## Progress
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Foundation | 3/3 | Complete | 2026-03-22 |
-| 2. Webhook Intake & Idempotency | 3/3 | Complete | 2026-03-22 |
-| 3. Processing Pipeline & Spam Filter | 4/4 | Complete | 2026-03-22 |
-| 4. AI Extraction | 3/3 | Complete | 2026-03-22 |
-| 5. File Storage | 3/3 | Complete | 2026-03-22 |
-| 6. Duplicate Detection | 3/3 | Complete | 2026-03-23 |
-| 7. Candidate Storage & Scoring | 2/2 | Complete | 2026-03-23 |
-| 8. Phase 1 Verification | 1/1 | Complete | 2026-03-23 |
-| 9. Client-facing REST API | 3/3 | Complete | 2026-03-23 |
-| 10. Add job creation feature | 4/4 | Complete | 2026-03-24 |
-| 11. API Protocol MVP Implementation | 1/1 | Complete    | 2026-03-25 |
-| 12. Support add candidate from the UI | 1/1 | Planned | 2026-03-26 |
-
 ### Phase 15: Migrate email ingestion to deterministic Job ID routing and remove semantic matching
 
 **Goal:** Replace semantic job title matching (expensive LLM calls) with deterministic Job ID extraction from email subjects. Extract Job ID via regex pattern, look up job by new `shortId` field, route candidates atomically. Remove JobTitleMatcherService entirely. Unmatched candidates (no Job ID in subject) store with jobId=null and skip scoring.
@@ -293,6 +281,34 @@ Plans:
 Plans:
 - [x] 15-01-PLAN.md — Task 1-8: Extend Job schema with shortId + migration, remove job_title_hint from extraction schema, add regex Job ID extraction to IngestionProcessor, delete JobTitleMatcherService, update seed data, full test verification
 
+### Phase 16: Backend Support for Manual Routing & UI Parity
+
+**Goal:** Enable recruiters to manually assign candidates to jobs—both for unmatched candidates (jobId = null from Phase 15) and for reassigning candidates between jobs. Extend PATCH /candidates/:id endpoint to support job reassignment while preserving full historical audit trail.
+
+**Depends on:** Phase 15
+
+**Requirements:** D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-18, D-19, D-20, D-21
+
+**Success Criteria** (what must be TRUE):
+1. PATCH /candidates/:id endpoint removes ALREADY_ASSIGNED error and allows reassignment (jobId=X→Y)
+2. Old Application + scores preserved on reassignment (historical audit trail maintained)
+3. New Application created for new job with stage='new' on reassignment
+4. Fresh ScoringAgentService.score() call triggered for new job on reassignment
+5. hiringStageId always reset to first enabled stage of new job (no stage preservation)
+6. Job validation: reassignment rejected with 400 NO_STAGES if job has no enabled stages
+7. All updates atomic via Prisma.$transaction (profile fields + job reassignment together)
+8. Scoring failure non-blocking: candidate assigned even if score insertion fails (logged as warning)
+9. GET /candidates endpoint supports ?unassigned=true filter returning candidates with jobId=null
+10. Job responses expose shortId field (used in Phase 15 email subject parsing)
+11. Candidate responses expose sourceAgency field (sourcing channel metadata)
+12. CandidateResponse DTO remains flattened—NO nested applications array; ai_score calculated via Math.max
+
+**Plans:** 3/3 plans
+
+Plans:
+- [ ] 16-01-PLAN.md — Wave 1: Add shortId to JobResponse, verify sourceAgency in CandidateResponse, confirm flattened response format
+- [ ] 16-02-PLAN.md — Wave 1: Implement updateCandidate() reassignment logic + findAll() unassigned filter, remove ALREADY_ASSIGNED error
+- [ ] 16-03-PLAN.md — Wave 2: Comprehensive integration tests (80+ tests), manual smoke test checkpoint for reassignment workflow
 
 ## Progress
 
@@ -308,23 +324,14 @@ Plans:
 | 8. Phase 1 Verification | 1/1 | Complete | 2026-03-23 |
 | 9. Client-facing REST API | 3/3 | Complete | 2026-03-23 |
 | 10. Add job creation feature | 4/4 | Complete | 2026-03-24 |
-| 11. API Protocol MVP Implementation | 1/1 | Complete    | 2026-03-25 |
-| 12. Support add candidate from the UI | 1/1 | Planned | 2026-03-26 |
-| 13. Implement Kanban board with candidate hiring stage tracking | 1/1 | Planned | 2026-03-26 |
-| 14. Wire OpenRouter extraction pipeline | 1/3 | Complete    | 2026-03-29 |
-| 15. Migrate email ingestion to deterministic Job ID routing | 1/1 | Complete    | 2026-03-31 |
-
-### Phase 16: Backend Support for Manual Routing & UI Parity
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 15
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 16 to break down)
+| 11. API Protocol MVP Implementation | 1/1 | Complete | 2026-03-25 |
+| 12. Support add candidate from the UI | 0/1 | Planned | TBD |
+| 13. Implement Kanban board with candidate hiring stage tracking | 0/1 | Planned | TBD |
+| 14. Wire OpenRouter extraction pipeline | 1/1 | Complete | 2026-03-29 |
+| 15. Migrate email ingestion to deterministic Job ID routing | 1/1 | Complete | 2026-03-31 |
+| 16. Backend Support for Manual Routing & UI Parity | 0/3 | Planned | TBD |
 
 ---
 
 *Roadmap created: 2026-03-22 by /gsd:new-roadmap*
-*Updated: 2026-03-31 by plan-phase (Phase 15 planning complete)*
+*Updated: 2026-03-31 by plan-phase (Phase 16 planning complete)*
