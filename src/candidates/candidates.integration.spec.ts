@@ -84,6 +84,9 @@ function makeBasePrisma(overrides: Record<string, any> = {}) {
       findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    jobStage: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'stage-uuid', order: 1, isEnabled: true }),
+    },
     $transaction: makeTransactionMock(),
     ...overrides,
   };
@@ -130,10 +133,10 @@ describe('POST /candidates', () => {
 
     expect(result).toHaveProperty('id', 'cand-uuid');
     expect(result).toHaveProperty('cv_file_url', null);
-    expect(result).toHaveProperty('cv_text', null);
     expect(result).toHaveProperty('application_id', 'app-uuid');
     expect(result).toHaveProperty('full_name', 'Jane Doe');
     expect(result).toHaveProperty('source', 'linkedin');
+    expect(result).not.toHaveProperty('cv_text'); // cv_text is not returned in response
   });
 
   // Test 2: Success flow with CV file
