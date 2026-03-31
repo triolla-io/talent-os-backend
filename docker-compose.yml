@@ -1,8 +1,8 @@
 services:
   api:
     build: .
-    ports:
-      - '3000:3000'
+    # D-33: api does NOT expose port 3000 to host — only nginx faces internet
+    # (removed: ports: - '3000:3000')
     env_file: .env
     environment:
       DATABASE_URL: postgresql://triolla:password@postgres:5432/triolla
@@ -14,6 +14,19 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # D-22: Docker healthcheck using GET /api/health (added in plan 02)
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/api/health || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # D-27: Resource limits for Hetzner CX21 (2 vCPU, 4GB RAM)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   worker:
     build: .
@@ -29,6 +42,12 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # D-27: Worker is memory-heavier due to AI scoring
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
 
   postgres:
     image: postgres:16-alpine
@@ -46,6 +65,13 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+    # D-27: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1024M
 
   redis:
     image: redis:7-alpine
@@ -59,7 +85,40 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+    restart: unless-stopped
+    # D-27: Redis resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  # D-33: Nginx reverse proxy — TLS termination, HTTP->HTTPS redirect, proxy to api:3000
+  nginx:
+    image: nginx:alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - letsencrypt_data:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # D-35 + D-37: Let's Encrypt certbot with automatic renewal loop
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - letsencrypt_data:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+  letsencrypt_data:
+  certbot_webroot:
