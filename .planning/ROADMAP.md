@@ -267,66 +267,54 @@ Plans:
 | 10. Add job creation feature | 4/4 | Complete | 2026-03-24 |
 | 11. API Protocol MVP Implementation | 1/1 | Complete    | 2026-03-25 |
 | 12. Support add candidate from the UI | 1/1 | Planned | 2026-03-26 |
+
+### Phase 15: Migrate email ingestion to deterministic Job ID routing and remove semantic matching
+
+**Goal:** Replace semantic job title matching (expensive LLM calls) with deterministic Job ID extraction from email subjects. Extract Job ID via regex pattern, look up job by new `shortId` field, route candidates atomically. Remove JobTitleMatcherService entirely. Unmatched candidates (no Job ID in subject) store with jobId=null and skip scoring.
+
+**Depends on:** Phase 14
+
+**Requirements:** [Phase 15 is a refactoring/migration phase; requirements are inherited from Phase 7 (CAND-01, CAND-02, CAND-03, SCOR-01, SCOR-02, SCOR-03, SCOR-04, SCOR-05)]
+
+**Success Criteria** (what must be TRUE):
+1. Job model has `shortId` field with UNIQUE(tenantId, shortId) constraint; existing jobs backfilled deterministically
+2. Job ID extracted from email subject via regex pattern `[Job ID: ...]` or `[JID: ...]` (case insensitive)
+3. IngestionProcessor looks up Job by (shortId, tenantId); sets candidate.jobId atomically
+4. No Job ID found → candidate stored with jobId=null; no scoring (skipped entirely)
+5. No Job ID in subject → candidate stored with jobId=null; no scoring
+6. JobTitleMatcherService completely deleted from codebase (both .ts and .spec.ts files)
+7. CandidateExtractSchema has 9 fields (job_title_hint removed); no longer passed to extraction
+8. Email ingestion routing is deterministic (regex + DB lookup), not semantic (LLM inference)
+9. All tests passing; no TypeScript errors; full test suite green
+10. Cost/perf improvement: $0 for routing (was ~$6/month for semantic), 2ms latency (was 500ms+ per LLM call)
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 15-01-PLAN.md — Task 1-8: Extend Job schema with shortId + migration, remove job_title_hint from extraction schema, add regex Job ID extraction to IngestionProcessor, delete JobTitleMatcherService, update seed data, full test verification
+
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Foundation | 3/3 | Complete | 2026-03-22 |
+| 2. Webhook Intake & Idempotency | 3/3 | Complete | 2026-03-22 |
+| 3. Processing Pipeline & Spam Filter | 4/4 | Complete | 2026-03-22 |
+| 4. AI Extraction | 3/3 | Complete | 2026-03-22 |
+| 5. File Storage | 3/3 | Complete | 2026-03-22 |
+| 6. Duplicate Detection | 3/3 | Complete | 2026-03-23 |
+| 7. Candidate Storage & Scoring | 2/2 | Complete | 2026-03-23 |
+| 8. Phase 1 Verification | 1/1 | Complete | 2026-03-23 |
+| 9. Client-facing REST API | 3/3 | Complete | 2026-03-23 |
+| 10. Add job creation feature | 4/4 | Complete | 2026-03-24 |
+| 11. API Protocol MVP Implementation | 1/1 | Complete    | 2026-03-25 |
+| 12. Support add candidate from the UI | 1/1 | Planned | 2026-03-26 |
 | 13. Implement Kanban board with candidate hiring stage tracking | 1/1 | Planned | 2026-03-26 |
 | 14. Wire OpenRouter extraction pipeline | 1/3 | Complete    | 2026-03-29 |
-
-### Phase 12: Support add candidate from the UI
-
-**Goal:** Enable recruiters to add candidates directly via the UI (not just via email webhooks). Support full candidate creation flow with file attachments.
-
-**Depends on:** Phase 11
-
-**Plans:** 1 plan
-
-Plans:
-- [x] 12-01-PLAN.md — Full implementation (researched, context gathered, plan written)
-
-### Phase 13: Implement Kanban board with candidate hiring stage tracking
-
-**Goal:** Track candidates' current hiring stage directly on the Candidate entity, auto-assign the first stage when a candidate is created, and expose stage information in API responses for Kanban board UI rendering.
-
-**Depends on:** Phase 11
-
-**Requirements:** KANBAN-01, KANBAN-02, KANBAN-03, KANBAN-04, KANBAN-05
-
-**Success Criteria** (what must be TRUE):
-1. Candidate model has `hiring_stage_id` FK field pointing to JobStage
-2. CandidatesService.createCandidate() auto-assigns first JobStage (by position order) to new candidates
-3. GET /api/candidates response includes job_id, hiring_stage_id, hiring_stage_name for Kanban board rendering
-4. Existing candidates with job_id backfilled with first stage via Prisma migration
-5. Data integrity enforced: if job_id is NOT NULL, hiring_stage_id must also be NOT NULL
-6. All existing tests pass; zero breaking changes to API contract (additive fields only)
-
-**Plans:** 1/1 plan
-
-Plans:
-- [x] 13-01-PLAN.md — Wave 1: Schema update, migration with 3-step backfill, service logic, API response extension, tests
-
-### Phase 14: Wire OpenRouter extraction pipeline: email→LLM→dedup→scoring→UI
-
-**Goal:** Fix critical bugs and gaps in the email-to-candidate pipeline: error swallowing prevents BullMQ retries; schema missing 4 fields (currentRole, yearsExperience, location, source_hint); scoring is a hardcoded mock (score=72 always); deterministic fallback is dead code. After this phase: extraction errors propagate correctly, all candidate fields extracted, real Gemini LLM scoring via OpenRouter, deterministic fallback on final BullMQ attempt.
-
-**Depends on:** Phase 13
-
-**Requirements:** AIEX-01, AIEX-02, AIEX-03, CAND-01, CAND-02, CAND-03, SCOR-01, SCOR-02, SCOR-03, SCOR-04, SCOR-05
-
-**Success Criteria** (what must be TRUE):
-1. CandidateExtractSchema has 9 fields: full_name, email, phone, current_role, years_experience, location, skills, ai_summary, source_hint
-2. extract() throws on API error (no more silent fallback swallowing); BullMQ retries on transient failures
-3. On final BullMQ attempt (3/3), extractDeterministically() is called before marking job failed
-4. ScoringAgentService calls OpenRouter with google/gemini-2.0-flash:free (no hardcoded score=72)
-5. Phase 7 candidate.update sets currentRole, yearsExperience, location from extraction (not null)
-6. DedupService.insertCandidate() uses extraction.source_hint for source field (not always 'direct')
-7. Full npm test suite passes with all new tests green
-
-**Plans:** 3/3 plans complete
-
-Plans:
-- [ ] 14-01-PLAN.md — Wave 1A: Extend CandidateExtractSchema (9 fields), fix extract() error handling, update signatures, update test helpers
-- [x] 14-02-PLAN.md — Wave 1B: Replace mock ScoringAgentService with real OpenRouter call, add ConfigModule to ScoringModule
-- [ ] 14-03-PLAN.md — Wave 2: Update processor (metadata, enrichment fields, deterministic fallback), DedupService source param, 5 new integration tests
+| 15. Migrate email ingestion to deterministic Job ID routing | 1/1 | Planned | 2026-03-31 |
 
 ---
 
 *Roadmap created: 2026-03-22 by /gsd:new-roadmap*
-*Updated: 2026-03-29 by plan-phase (Phase 14 planning complete)*
+*Updated: 2026-03-31 by plan-phase (Phase 15 planning complete)*
