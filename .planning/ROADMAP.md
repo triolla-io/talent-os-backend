@@ -312,7 +312,7 @@ Plans:
 | 12. Support add candidate from the UI | 1/1 | Planned | 2026-03-26 |
 | 13. Implement Kanban board with candidate hiring stage tracking | 1/1 | Planned | 2026-03-26 |
 | 14. Wire OpenRouter extraction pipeline | 1/3 | Complete    | 2026-03-29 |
-| 15. Migrate email ingestion to deterministic Job ID routing | 1/1 | Planned | 2026-03-31 |
+| 15. Migrate email ingestion to deterministic Job ID routing | 1/1 | Complete    | 2026-03-31 |
 
 ---
 
