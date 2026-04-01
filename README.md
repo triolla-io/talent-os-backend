@@ -19,37 +19,37 @@ Automated email intake pipeline: receives CVs via Postmark webhooks, extracts ca
 
 ## Environment Variables
 
-| Variable                 | Required | Description                                                                    |
-| ------------------------ | -------- | ------------------------------------------------------------------------------ |
+| Variable                 | Required | Description                                                                   |
+| ------------------------ | -------- | ----------------------------------------------------------------------------- |
 | `DATABASE_URL`           | Yes      | PostgreSQL connection string. Format: `postgresql://user:pass@host:5432/db`   |
-| `REDIS_URL`              | Yes      | Redis connection string. Format: `redis://host:6379`                           |
-| `ANTHROPIC_API_KEY`      | Yes      | Anthropic API key for Claude Haiku (extraction) and Claude Sonnet (scoring)    |
-| `POSTMARK_WEBHOOK_TOKEN` | Yes      | Token from Postmark Inbound webhook settings (used for HTTP Basic Auth guard)  |
-| `TENANT_ID`              | Yes      | UUID of the tenant record in the `tenants` table. Run `make seed` to create.   |
-| `R2_ACCOUNT_ID`          | Yes      | Cloudflare R2 account ID (from Cloudflare dashboard → R2 → Manage API Tokens)  |
-| `R2_ACCESS_KEY_ID`       | Yes      | Cloudflare R2 access key ID                                                    |
-| `R2_SECRET_ACCESS_KEY`   | Yes      | Cloudflare R2 secret access key                                                |
-| `R2_BUCKET_NAME`         | Yes      | Cloudflare R2 bucket name for CV file storage (e.g. `triolla-cvs`)             |
-| `POSTGRES_PASSWORD`      | Yes      | PostgreSQL superuser password (used by docker-compose.yml postgres service)    |
-| `NODE_ENV`               | No       | `development` (default) or `production`                                        |
+| `REDIS_URL`              | Yes      | Redis connection string. Format: `redis://host:6379`                          |
+| `ANTHROPIC_API_KEY`      | Yes      | Anthropic API key for Claude Haiku (extraction) and Claude Sonnet (scoring)   |
+| `POSTMARK_WEBHOOK_TOKEN` | Yes      | Token from Postmark Inbound webhook settings (used for HTTP Basic Auth guard) |
+| `TENANT_ID`              | Yes      | UUID of the tenant record in the `tenants` table. Run `make seed` to create.  |
+| `R2_ACCOUNT_ID`          | Yes      | Cloudflare R2 account ID (from Cloudflare dashboard → R2 → Manage API Tokens) |
+| `R2_ACCESS_KEY_ID`       | Yes      | Cloudflare R2 access key ID                                                   |
+| `R2_SECRET_ACCESS_KEY`   | Yes      | Cloudflare R2 secret access key                                               |
+| `R2_BUCKET_NAME`         | Yes      | Cloudflare R2 bucket name for CV file storage (e.g. `triolla-cvs`)            |
+| `POSTGRES_PASSWORD`      | Yes      | PostgreSQL superuser password (used by docker-compose.yml postgres service)   |
+| `NODE_ENV`               | No       | `development` (default) or `production`                                       |
 
 > All required variables are listed in `.env.example`. Copy it and fill in secrets — do not commit `.env` to git.
 
 ## Makefile Targets
 
-| Target                            | Description                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------ |
-| `make up`                         | Start dev stack, wait for DB healthy, run migrations automatically                   |
-| `make down`                       | Stop dev stack                                                                       |
-| `make reset`                      | Wipe all volumes and restart fresh (clean-slate testing)                             |
-| `make seed`                       | Seed DB with test jobs and candidate (opt-in)                                        |
-| `make logs`                       | Follow all container logs                                                            |
-| `make test`                       | Run unit tests inside Docker (matches CI environment)                                |
-| `make backup`                     | Dump DB to `./backups/YYYY-MM-DD_HH-MM.sql.gz`                                       |
-| `make restore BACKUP=path`        | Restore DB from a dump file                                                          |
-| `make ngrok`                      | Start ngrok tunnel for Postmark webhook testing                                      |
-| `make migrate-prod`               | Run `prisma migrate deploy` on production server (requires `PROD_HOST=user@server`)  |
-| `make ssl-setup DOMAIN=x EMAIL=y` | Provision Let's Encrypt TLS certificate                                              |
+| Target                            | Description                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `make up`                         | Start dev stack, wait for DB healthy, run migrations automatically                  |
+| `make down`                       | Stop dev stack                                                                      |
+| `make reset`                      | Wipe all volumes and restart fresh (clean-slate testing)                            |
+| `make seed`                       | Seed DB with test jobs and candidate (opt-in)                                       |
+| `make logs`                       | Follow all container logs                                                           |
+| `make test`                       | Run unit tests inside Docker (matches CI environment)                               |
+| `make backup`                     | Dump DB to `./backups/YYYY-MM-DD_HH-MM.sql.gz`                                      |
+| `make restore BACKUP=path`        | Restore DB from a dump file                                                         |
+| `make ngrok`                      | Start ngrok tunnel for Postmark webhook testing                                     |
+| `make migrate-prod`               | Run `prisma migrate deploy` on production server (requires `PROD_HOST=user@server`) |
+| `make ssl-setup DOMAIN=x EMAIL=y` | Provision Let's Encrypt TLS certificate                                             |
 
 ## Local Development
 
@@ -179,14 +179,14 @@ Pipeline stages:
 
 ## Troubleshooting
 
-| Problem                                       | Solution                                                                                                                |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `make up` hangs waiting for DB                | Run `make logs` in another terminal to see postgres startup errors. Usually a missing `POSTGRES_PASSWORD` in `.env`.    |
-| Migrations fail: "Database does not exist"    | Run `make reset` to wipe volumes and start fresh.                                                                       |
-| `TENANT_ID not found` at startup              | Run `make seed` to create the default tenant and get its UUID. Update `.env` with the UUID.                             |
-| Postmark webhook returns 401                  | Check `POSTMARK_WEBHOOK_TOKEN` in `.env` matches the token configured in Postmark Dashboard → Inbound → Settings.       |
-| CV processing fails silently                  | Check worker logs: `make logs`. Look for `Job failed` log lines with an `error` field.                                  |
-| Port 3000 already in use                      | Stop other processes: `lsof -i :3000`. Or set `PORT=3001` in `.env`.                                                   |
-| Docker build fails: `prisma generate` error   | Run `make reset` — stale node_modules volume sometimes has mismatched binaries.                                         |
-| `make test` runs forever                      | Tests are running inside Docker. First run downloads the image. Subsequent runs are faster.                             |
-| `make seed` fails: duplicate key              | Run `make reset` first to clear the database, then `make up` and `make seed`.                                           |
+| Problem                                     | Solution                                                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `make up` hangs waiting for DB              | Run `make logs` in another terminal to see postgres startup errors. Usually a missing `POSTGRES_PASSWORD` in `.env`. |
+| Migrations fail: "Database does not exist"  | Run `make reset` to wipe volumes and start fresh.                                                                    |
+| `TENANT_ID not found` at startup            | Run `make seed` to create the default tenant and get its UUID. Update `.env` with the UUID.                          |
+| Postmark webhook returns 401                | Check `POSTMARK_WEBHOOK_TOKEN` in `.env` matches the token configured in Postmark Dashboard → Inbound → Settings.    |
+| CV processing fails silently                | Check worker logs: `make logs`. Look for `Job failed` log lines with an `error` field.                               |
+| Port 3000 already in use                    | Stop other processes: `lsof -i :3000`. Or set `PORT=3001` in `.env`.                                                 |
+| Docker build fails: `prisma generate` error | Run `make reset` — stale node_modules volume sometimes has mismatched binaries.                                      |
+| `make test` runs forever                    | Tests are running inside Docker. First run downloads the image. Subsequent runs are faster.                          |
+| `make seed` fails: duplicate key            | Run `make reset` first to clear the database, then `make up` and `make seed`.                                        |

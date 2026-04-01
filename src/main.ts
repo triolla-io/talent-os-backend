@@ -22,8 +22,11 @@ async function bootstrap() {
   // Default Express limit is 100 KB which rejects most real CVs.
   app.useBodyParser('json', { limit: '10mb' });
 
-  // D-16: CORS deny-all — API only receives Postmark webhooks in Phase 1, no browser clients
-  app.enableCors({ origin: false });
+  // D-16: CORS policy based on environment
+  // Production Phase 1: deny-all (webhooks only, no browser clients)
+  // Development: Allow local React UI
+  const isDev = process.env.NODE_ENV === 'development';
+  app.enableCors({ origin: isDev ? 'http://localhost:5173' : false });
 
   // Global /api prefix — must be set BEFORE app.listen()
   app.setGlobalPrefix('api');

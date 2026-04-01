@@ -209,4 +209,3 @@ describe('JobsController', () => {
     });
   });
 });
-
