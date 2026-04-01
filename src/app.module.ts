@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { LoggerModule } from 'nestjs-pino';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { envSchema } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
@@ -26,6 +27,11 @@ import { HealthModule } from './health/health.module';
         level: process.env.LOG_LEVEL ?? 'info',
       },
     }),
+    // D-15: Rate limiting — 100 requests per 60-second window per IP
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
     PrismaModule,
     BullModule.forRootAsync({
       inject: [ConfigService],
