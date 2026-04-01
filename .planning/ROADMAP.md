@@ -23,7 +23,7 @@
 - [x] **Phase 14: Wire OpenRouter extraction pipeline** - Replace mock extraction with real LLM calls (completed 2026-03-29)
 - [x] **Phase 15: Migrate email ingestion to deterministic Job ID routing** - Regex + shortId lookup, remove semantic matching (completed 2026-03-31)
 - [ ] **Phase 16: Backend Support for Manual Routing & UI Parity** - Manual job assignment API, expose shortId/sourceAgency in responses (planned 2026-03-31)
-- [ ] **Phase 17: Production Deployment Readiness** - Fix tests, health endpoint, security hardening, Nginx/SSL, Makefile, CI/CD pipeline
+- [x] **Phase 17: Production Deployment Readiness** - Fix tests, health endpoint, security hardening, Nginx/SSL, Makefile, CI/CD pipeline (completed 2026-04-01)
 
 ## Phase Details
 
@@ -319,14 +319,14 @@ Plans:
 
 **Requirements:** D-01 to D-38 (from 17-CONTEXT.md)
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 17-01-PLAN.md — Wave 1: Fix 6 failing unit tests (jobs.integration.spec.ts + ingestion.processor.spec.ts)
 - [x] 17-02-PLAN.md — Wave 1: Health endpoint (GET /health), E2E smoke test, nestjs-pino structured logging, BullMQ lifecycle logs
 - [x] 17-03-PLAN.md — Wave 2: Security hardening (helmet, throttler, CORS deny-all) + API endpoint review vs PROTOCOL.md
 - [x] 17-04-PLAN.md — Wave 2: Nginx reverse proxy + Let's Encrypt certbot + docker-compose resource limits + healthcheck
-- [ ] 17-05-PLAN.md — Wave 3: Makefile (11 targets) + Jenkinsfile (parameterized build) + deploy.sh + README rewrite
+- [x] 17-05-PLAN.md — Wave 3: Makefile (11 targets) + Jenkinsfile (parameterized build) + deploy.sh + README rewrite
 
 ## Progress
 
@@ -348,7 +348,7 @@ Plans:
 | 14. Wire OpenRouter extraction pipeline | 1/1 | Complete | 2026-03-29 |
 | 15. Migrate email ingestion to deterministic Job ID routing | 1/1 | Complete | 2026-03-31 |
 | 16. Backend Support for Manual Routing & UI Parity | 0/3 | Planned | TBD |
-| 17. Production Deployment Readiness | 4/5 | In Progress|  |
+| 17. Production Deployment Readiness | 5/5 | Complete   | 2026-04-01 |
 
 ---
 
