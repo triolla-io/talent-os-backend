@@ -26,7 +26,7 @@ export const CreateJobSchema = z
     title: z.string().min(1, 'Job title required').max(255),
     // Optional job fields
     department: z.string().optional(),
-    location: z.string().optional(),
+    location: z.string().optional().default("Ra'anana"),
     job_type: z.enum(['full_time', 'part_time', 'contract']).default('full_time'),
     status: z.enum(['draft', 'open', 'closed']).default('draft'),
     hiring_manager: z.string().optional(),
