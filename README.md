@@ -1,130 +1,192 @@
 # Triolla Talent OS — Backend
 
-Automated email intake pipeline: receive CVs by email, extract candidate data with AI, deduplicate, score against open jobs.
+Automated email intake pipeline: receives CVs via Postmark webhooks, extracts candidate data using AI, deduplicates, scores against open positions, stores in PostgreSQL.
 
 ## Prerequisites
 
-Before you start, ensure you have the following installed:
+- **Docker** 24+ and **Docker Compose** v2+
+- **Make** (usually pre-installed on macOS/Linux; on macOS: `xcode-select --install`)
+- **ngrok** (optional, for local Postmark webhook testing — `brew install ngrok`)
 
-- **Docker Desktop** — for running services with `docker compose`
-- **Node.js 22+** and **npm** — for running scripts and the Prisma CLI locally
-- **ngrok** — for exposing localhost to Postmark inbound webhooks
-  - macOS: `brew install ngrok`
-  - Other platforms: https://ngrok.com/download
-- **A Postmark account** with an inbound webhook server configured (free tier works)
+## Quick Start
 
-## Environment Setup
+1. Clone the repository
+2. Copy environment variables: `cp .env.example .env`
+3. Fill in required secrets in `.env` (see [Environment Variables](#environment-variables))
+4. Start the stack: `make up`
+5. Seed test data: `make seed`
+6. API available at: `http://localhost:3000/api`
 
-```bash
-cp .env.example .env
-```
+## Environment Variables
 
-Then edit `.env` and fill in each variable:
+| Variable                 | Required | Description                                                                    |
+| ------------------------ | -------- | ------------------------------------------------------------------------------ |
+| `DATABASE_URL`           | Yes      | PostgreSQL connection string. Format: `postgresql://user:pass@host:5432/db`   |
+| `REDIS_URL`              | Yes      | Redis connection string. Format: `redis://host:6379`                           |
+| `ANTHROPIC_API_KEY`      | Yes      | Anthropic API key for Claude Haiku (extraction) and Claude Sonnet (scoring)    |
+| `POSTMARK_WEBHOOK_TOKEN` | Yes      | Token from Postmark Inbound webhook settings (used for HTTP Basic Auth guard)  |
+| `TENANT_ID`              | Yes      | UUID of the tenant record in the `tenants` table. Run `make seed` to create.   |
+| `R2_ACCOUNT_ID`          | Yes      | Cloudflare R2 account ID (from Cloudflare dashboard → R2 → Manage API Tokens)  |
+| `R2_ACCESS_KEY_ID`       | Yes      | Cloudflare R2 access key ID                                                    |
+| `R2_SECRET_ACCESS_KEY`   | Yes      | Cloudflare R2 secret access key                                                |
+| `R2_BUCKET_NAME`         | Yes      | Cloudflare R2 bucket name for CV file storage (e.g. `triolla-cvs`)             |
+| `POSTGRES_PASSWORD`      | Yes      | PostgreSQL superuser password (used by docker-compose.yml postgres service)    |
+| `NODE_ENV`               | No       | `development` (default) or `production`                                        |
 
-| Variable                 | Where to get it                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`      | Anthropic Console -> API Keys                                                                                     |
-| `POSTMARK_WEBHOOK_TOKEN` | Choose any secret string; configure the same value in Postmark -> Settings -> Inbound -> HTTP Basic Auth password |
-| `R2_ACCOUNT_ID`          | Cloudflare dashboard -> R2 -> Manage R2 API Tokens                                                                |
-| `R2_ACCESS_KEY_ID`       | Cloudflare R2 API token                                                                                           |
-| `R2_SECRET_ACCESS_KEY`   | Cloudflare R2 API token                                                                                           |
-| `R2_BUCKET_NAME`         | Your R2 bucket name (e.g. `triolla-cvs`)                                                                          |
-| `POSTGRES_PASSWORD`      | Set to any local password (e.g. `changeme`)                                                                       |
-| `TENANT_ID`              | Leave as `00000000-0000-0000-0000-000000000001` (hardcoded dev tenant)                                            |
-| `DATABASE_URL`           | Leave as-is — matches `docker-compose.dev.yml`                                                                    |
-| `REDIS_URL`              | Leave as-is — matches `docker-compose.dev.yml`                                                                    |
+> All required variables are listed in `.env.example`. Copy it and fill in secrets — do not commit `.env` to git.
 
-## First Run
+## Makefile Targets
 
-**Step 1 — Install dependencies:**
+| Target                            | Description                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| `make up`                         | Start dev stack, wait for DB healthy, run migrations automatically                   |
+| `make down`                       | Stop dev stack                                                                       |
+| `make reset`                      | Wipe all volumes and restart fresh (clean-slate testing)                             |
+| `make seed`                       | Seed DB with test jobs and candidate (opt-in)                                        |
+| `make logs`                       | Follow all container logs                                                            |
+| `make test`                       | Run unit tests inside Docker (matches CI environment)                                |
+| `make backup`                     | Dump DB to `./backups/YYYY-MM-DD_HH-MM.sql.gz`                                       |
+| `make restore BACKUP=path`        | Restore DB from a dump file                                                          |
+| `make ngrok`                      | Start ngrok tunnel for Postmark webhook testing                                      |
+| `make migrate-prod`               | Run `prisma migrate deploy` on production server (requires `PROD_HOST=user@server`)  |
+| `make ssl-setup DOMAIN=x EMAIL=y` | Provision Let's Encrypt TLS certificate                                              |
 
-```bash
-npm install
-```
+## Local Development
 
-**Step 2 — Start all services:**
-
-```bash
-npm run docker:dev
-```
-
-Wait until you see `NestJS application listening` in the logs (usually 15-20 seconds).
-
-**Step 3 — Bootstrap the database** (new terminal, first run only):
-
-```bash
-npm run db:setup
-```
-
-This runs Prisma migrations and seeds 1 tenant + 1 "Software Engineer" job.
-
-**Step 4 — Verify the API is healthy:**
+### Starting the stack
 
 ```bash
-node local-test/run.js --health
-# Expected output: Health OK
+make up       # starts api + worker + postgres + redis, runs migrations
+make seed     # populate test data (jobs + candidate)
+make logs     # watch all container logs
 ```
 
-## Testing the Full Flow
-
-**Step 1 — Add at least one CV file** (PDF, DOC, or DOCX) to `local-test/files/`.
-
-**Step 2 — Start an ngrok tunnel** so Postmark can reach localhost:
+### Testing webhooks locally with ngrok
 
 ```bash
-npm run ngrok
+make ngrok
+# Opens HTTPS tunnel to localhost:3000 and prints the public URL.
+# Copy the URL and configure Postmark:
+#   Postmark Dashboard → Inbound → Webhook URL:
+#   https://postmark:<POSTMARK_WEBHOOK_TOKEN>@<ngrok-id>.ngrok.io/api/webhooks/email
 ```
 
-Copy the printed URL, e.g.: `https://abc123.ngrok-free.app/webhooks/email`
+The ngrok URL changes on every restart — update Postmark each session.
 
-**Step 3 — Configure Postmark:**
-
-- Go to Postmark -> Settings -> Inbound
-- Set the Webhook URL to the ngrok URL printed above
-- Set HTTP Basic Auth: username = `postmark`, password = value of `POSTMARK_WEBHOOK_TOKEN` from `.env`
-
-**Step 4 — Send a test webhook locally** (bypasses Postmark, hits localhost directly):
+### Running tests
 
 ```bash
-node local-test/run.js
-# Or send a specific file:
-node local-test/run.js my-cv.pdf
+make test           # runs jest inside Docker (same as CI)
+npm run test        # runs locally (faster, requires Node installed)
+npm run test:e2e    # E2E smoke tests (boots full NestJS app, hits /api/health)
 ```
 
-**Step 5 — Watch the worker process the job:**
+### Resetting to a clean state
 
 ```bash
-npm run docker:logs:worker
+make reset   # wipes postgres_data and redis_data volumes, then make up
+make seed    # re-seed after reset
 ```
 
-**Step 6 — Inspect results in Prisma Studio:**
+## API Documentation
 
-```bash
-npm run db:studio
-# Open http://localhost:5555
-# Check: email_intake_log (status: success), candidates, applications, candidate_job_scores
-```
+Full REST API contract: see `PROTOCOL.md` for all endpoints, request/response shapes, and status codes.
 
-## Useful Commands
+Key endpoints:
 
-| Command                           | What it does                           |
-| --------------------------------- | -------------------------------------- |
-| `npm run docker:dev`              | Start all services, stream logs        |
-| `npm run docker:down`             | Stop and remove containers             |
-| `npm run docker:logs`             | Tail all service logs                  |
-| `npm run docker:logs:api`         | Tail API logs only                     |
-| `npm run docker:logs:worker`      | Tail worker logs only                  |
-| `npm run db:setup`                | Run migrations + seed (first run)      |
-| `npm run db:studio`               | Open Prisma Studio at localhost:5555   |
-| `npm run ngrok`                   | Start ngrok tunnel, print Postmark URL |
-| `npm test`                        | Run unit tests                         |
-| `node local-test/run.js`          | Send all CVs in local-test/files/      |
-| `node local-test/run.js --health` | Check API health                       |
+- `GET /api/health` — liveness probe (200 = healthy, 503 = degraded with DB/Redis check details)
+- `GET /api/jobs` — list all jobs
+- `GET /api/candidates` — list candidates (supports `?q=`, `?filter=`, `?job_id=`)
+- `GET /api/candidates/:id` — single candidate
+- `POST /api/jobs` — create a job
+- `PUT /api/jobs/:id` — update a job
+- `DELETE /api/jobs/:id` — soft-delete a job
+- `POST /api/webhooks/email` — Postmark inbound webhook (requires HTTP Basic Auth)
 
 ## Architecture
 
-- **API service** (port 3000): Receives Postmark inbound webhooks, validates auth via HTTP Basic Auth, enqueues jobs in BullMQ
-- **Worker service**: Processes jobs — extracts text from CV attachments, runs AI extraction (Claude Haiku), deduplicates candidates via pg_trgm, scores against open jobs (Claude Sonnet), stores results in PostgreSQL
+```
+Postmark → POST /api/webhooks/email → BullMQ queue → Worker
+                                                        ↓
+                               SpamFilter → AttachmentExtractor → R2 upload
+                                                        ↓
+                               ExtractionAgent (Claude Haiku) → DedupService (pg_trgm)
+                                                        ↓
+                               ScoringAgent (Claude Sonnet) → PostgreSQL
+```
+
+- **API service** (port 3000): Receives Postmark inbound webhooks, validates Basic Auth, enqueues jobs in BullMQ
+- **Worker service**: Processes jobs — extracts text from CV attachments, runs AI extraction, deduplicates via pg_trgm, scores against open jobs, stores in PostgreSQL
 - **PostgreSQL 16**: All persistent data; pg_trgm extension for fuzzy candidate deduplication
 - **Redis 7**: BullMQ job queue between API and Worker
 - **Cloudflare R2**: Stores original CV files (S3-compatible, 10 GB free tier)
+
+## Deployment
+
+### Prerequisites
+
+- Hetzner VPS (CX21 recommended: 2 vCPU, 4 GB RAM) or any Linux server with Docker installed
+- Domain name with DNS A record pointing to server IP
+- SSH access configured for the server
+
+### First-time server setup
+
+```bash
+# On the server:
+git clone <repo> ~/triolla
+cp ~/triolla/.env.example ~/triolla/.env
+# Edit ~/triolla/.env with production secrets
+```
+
+### Provision TLS certificate (once)
+
+```bash
+# From your local machine:
+make ssl-setup DOMAIN=api.yourdomain.com EMAIL=admin@yourdomain.com
+# Update nginx/nginx.conf: replace $DOMAIN placeholder with your actual domain
+```
+
+### Run database migrations
+
+Run before the first deploy and after every schema change:
+
+```bash
+PROD_HOST=ubuntu@your.server.ip make migrate-prod
+```
+
+### Deploy
+
+```bash
+PROD_HOST=ubuntu@your.server.ip ./scripts/deploy.sh main
+```
+
+The deploy script SSHes to the server, pulls the specified branch, and runs `docker compose up -d --build`. It does NOT run migrations automatically.
+
+### CI/CD (Jenkins)
+
+Trigger a parameterized build with `BRANCH_NAME=main` to run the Build → Test → Docker Build pipeline.
+
+The pipeline does NOT auto-deploy — deploy is always a manual human action via `scripts/deploy.sh`.
+
+```
+Pipeline stages:
+  1. Checkout — git checkout $BRANCH_NAME
+  2. Install   — npm ci
+  3. Build     — npm run build (TypeScript compilation)
+  4. Test      — npm run test  (unit tests; failing tests block pipeline)
+  5. Docker    — docker build -t triolla-backend (verifies image builds)
+```
+
+## Troubleshooting
+
+| Problem                                       | Solution                                                                                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `make up` hangs waiting for DB                | Run `make logs` in another terminal to see postgres startup errors. Usually a missing `POSTGRES_PASSWORD` in `.env`.    |
+| Migrations fail: "Database does not exist"    | Run `make reset` to wipe volumes and start fresh.                                                                       |
+| `TENANT_ID not found` at startup              | Run `make seed` to create the default tenant and get its UUID. Update `.env` with the UUID.                             |
+| Postmark webhook returns 401                  | Check `POSTMARK_WEBHOOK_TOKEN` in `.env` matches the token configured in Postmark Dashboard → Inbound → Settings.       |
+| CV processing fails silently                  | Check worker logs: `make logs`. Look for `Job failed` log lines with an `error` field.                                  |
+| Port 3000 already in use                      | Stop other processes: `lsof -i :3000`. Or set `PORT=3001` in `.env`.                                                   |
+| Docker build fails: `prisma generate` error   | Run `make reset` — stale node_modules volume sometimes has mismatched binaries.                                         |
+| `make test` runs forever                      | Tests are running inside Docker. First run downloads the image. Subsequent runs are faster.                             |
+| `make seed` fails: duplicate key              | Run `make reset` first to clear the database, then `make up` and `make seed`.                                           |
