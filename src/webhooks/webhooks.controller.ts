@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { WebhooksService } from './webhooks.service';
 import { PostmarkPayloadDto, PostmarkPayloadSchema } from './dto/postmark-payload.dto';
@@ -12,8 +12,18 @@ export class WebhooksController {
   @Post('email')
   @HttpCode(HttpStatus.OK)
   async ingestEmail(@Body() rawBody: unknown): Promise<{ status: string }> {
-    // Parse and validate payload with Zod
-    const payload = PostmarkPayloadSchema.parse(rawBody) as PostmarkPayloadDto;
+    // Parse and validate payload with Zod — return structured error on invalid payload
+    const result = PostmarkPayloadSchema.safeParse(rawBody);
+    if (!result.success) {
+      throw new BadRequestException({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid Postmark payload',
+          details: result.error.flatten().fieldErrors,
+        },
+      });
+    }
+    const payload = result.data as PostmarkPayloadDto;
     return this.webhooksService.enqueue(payload);
   }
 

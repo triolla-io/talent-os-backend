@@ -475,7 +475,9 @@ export class CandidatesService {
     if (!candidate) throw new NotFoundException({ error: { code: 'NOT_FOUND', message: 'Candidate not found' } });
 
     if (!candidate.jobId) {
-      throw new BadRequestException('Candidate is not assigned to any job pipeline');
+      throw new BadRequestException({
+        error: { code: 'NO_JOB', message: 'Candidate is not assigned to any job pipeline' },
+      });
     }
 
     const stage = await this.prisma.jobStage.findFirst({
@@ -483,7 +485,9 @@ export class CandidatesService {
     });
 
     if (!stage) {
-      throw new BadRequestException("Stage does not belong to the candidate's assigned job");
+      throw new BadRequestException({
+        error: { code: 'STAGE_NOT_FOUND', message: "Stage does not belong to the candidate's assigned job" },
+      });
     }
 
     await this.prisma.candidateStageSummary.upsert({
@@ -520,7 +524,9 @@ export class CandidatesService {
     });
 
     if (!candidate || !candidate.jobId) {
-      throw new BadRequestException('Candidate is not assigned to any job pipeline');
+      throw new BadRequestException({
+        error: { code: 'NO_JOB', message: 'Candidate is not assigned to any job pipeline' },
+      });
     }
 
     // Identify next stage
@@ -532,11 +538,15 @@ export class CandidatesService {
 
     const currentIndex = stages.findIndex((s) => s.id === currentStageId);
     if (currentIndex === -1) {
-      throw new BadRequestException('Current stage not found in job pipeline');
+      throw new BadRequestException({
+        error: { code: 'STAGE_NOT_FOUND', message: 'Current stage not found in job pipeline' },
+      });
     }
 
     if (currentIndex === stages.length - 1) {
-      throw new BadRequestException('Candidate is already at the last hiring stage');
+      throw new BadRequestException({
+        error: { code: 'LAST_STAGE', message: 'Candidate is already at the last hiring stage' },
+      });
     }
 
     const nextStageId = stages[currentIndex + 1].id;
