@@ -17,11 +17,13 @@ Phase 17 closes the v1.0 milestone by hardening the backend for production deplo
 ### Locked Decisions (D-01 to D-38)
 
 **Local Docker Workflow (D-01 to D-03):**
+
 - Makefile targets: `up`, `down`, `reset`, `seed`, `logs`, `test`, `backup`, `restore`, `ngrok`, `migrate-prod`
 - `make up` auto-migrates; `make seed` is explicit opt-in; `make reset` wipes volumes
 - Dev compose file is `docker-compose.dev.yml` (primary local workflow)
 
 **CI/CD Pipeline (D-04 to D-09):**
+
 - Jenkinsfile with parameterized builds: `BRANCH_NAME` (string, default: `main`)
 - Stages: Build → Test only (no auto-deploy); deploy remains manual
 - Secrets in `.env` files on server, not in Jenkins; migrations via `make migrate-prod` (explicit, never auto)
@@ -29,38 +31,45 @@ Phase 17 closes the v1.0 milestone by hardening the backend for production deplo
 - `BRANCH_NAME` parameter enables staging testing without separate Jenkinsfile
 
 **Test Coverage (D-10 to D-13):**
+
 - Fix all currently-failing unit tests (6 failures from Phase 16 changes)
 - Add E2E smoke test in `test/app.e2e-spec.ts` hitting `GET /health`
 - `make test` runs jest inside Docker container (same environment as Jenkins)
 - No full coverage push — fix what's broken + health endpoint E2E
 
 **Security Hardening (D-14 to D-17):**
+
 - `@nestjs/helmet` for HTTP security headers (global middleware in main.ts)
 - `@nestjs/throttler` for rate limiting on `POST /webhooks/email` endpoint
 - CORS deny-all by default (API only talks to Postmark webhooks in Phase 1)
-- Secrets audit: no raw tenant_id UUIDs, no stack traces, .gitignore covers .env*, no sensitive fields logged
+- Secrets audit: no raw tenant_id UUIDs, no stack traces, .gitignore covers .env\*, no sensitive fields logged
 
 **API Endpoint Review (D-18 to D-20):**
+
 - Full code review of all controllers + services (jobs, candidates, applications, webhooks, ingestion)
 - Verify every endpoint's response shape matches PROTOCOL.md (snake_case, correct types, HTTP status codes)
 - Fix all bugs found; document remaining known issues
 
 **Health Check Endpoint (D-21 to D-22):**
+
 - `GET /health` probes DB + Redis; returns 200 (healthy) or 503 (degraded)
 - Response: `{ status: "ok"|"degraded", checks: { database, redis }, uptime }`
 - Docker healthcheck in `docker-compose.yml` uses `GET /health`
 
 **Structured Logging (D-23 to D-24):**
+
 - JSON-structured output (pino OR NestJS built-in JSON logger)
 - Every log: `level`, `timestamp`, `context`, `message`
 - Worker logs BullMQ lifecycle: job started, completed, failed, retried (+ job.id, job.name, tenant_id, outcome)
 
 **Database Backups (D-25 to D-26):**
+
 - `make backup` runs pg_dump → `./backups/YYYY-MM-DD_HH-MM.sql.gz`
 - `make restore BACKUP=./backups/dump.sql.gz` drops and re-creates DB from dump
 - `backups/` directory is gitignored
 
 **Domain & SSL / Reverse Proxy (D-33 to D-38):**
+
 - **Nginx** reverse proxy (not Traefik — simpler ops)
 - In prod: API service does NOT expose port 3000 directly; Nginx faces internet
 - HTTP → HTTPS 301 redirect; port 443 TLS termination → `api:3000`
@@ -71,6 +80,7 @@ Phase 17 closes the v1.0 milestone by hardening the backend for production deplo
 - Certbot renewal: container with entrypoint running renewal every 12h
 
 **Container Resource Limits (D-27 to D-28):**
+
 - `api`: 512MB RAM / 0.5 CPU
 - `worker`: 768MB RAM / 1 CPU
 - `postgres`: 1GB RAM / 0.5 CPU
@@ -78,6 +88,7 @@ Phase 17 closes the v1.0 milestone by hardening the backend for production deplo
 - All containers: `restart: unless-stopped`
 
 **Scripts & README (D-29 to D-32):**
+
 - Clean up `scripts/ngrok-webhook.sh` (usage comments)
 - Consolidate duplicate npm scripts
 - Create `scripts/deploy.sh` (SSH + docker compose pull + up)
@@ -105,50 +116,52 @@ Phase 17 closes the v1.0 milestone by hardening the backend for production deplo
 
 ### Core
 
-| Library | Version | Purpose | Why Standard |
-|---------|---------|---------|--------------|
-| NestJS | 11.0.1 | HTTP framework + DI container | Locked by CLAUDE.md; mature, type-safe |
-| TypeScript | 5.7.3 | Type safety | Locked by CLAUDE.md |
-| Jest | 30.0.0 | Unit + E2E test framework | Pre-configured in NestJS CLI; fast, snapshot support |
-| ts-jest | 29.2.5 | TypeScript transpilation in Jest | Standard for NestJS projects |
-| Supertest | 7.0.0 | HTTP E2E testing | De-facto standard for NestJS API testing |
-| PostgreSQL | 16-alpine | Database | Locked by CLAUDE.md; Docker image used in compose |
-| Prisma | 7.0.0 | ORM + migrations | Locked by CLAUDE.md |
+| Library    | Version   | Purpose                          | Why Standard                                         |
+| ---------- | --------- | -------------------------------- | ---------------------------------------------------- |
+| NestJS     | 11.0.1    | HTTP framework + DI container    | Locked by CLAUDE.md; mature, type-safe               |
+| TypeScript | 5.7.3     | Type safety                      | Locked by CLAUDE.md                                  |
+| Jest       | 30.0.0    | Unit + E2E test framework        | Pre-configured in NestJS CLI; fast, snapshot support |
+| ts-jest    | 29.2.5    | TypeScript transpilation in Jest | Standard for NestJS projects                         |
+| Supertest  | 7.0.0     | HTTP E2E testing                 | De-facto standard for NestJS API testing             |
+| PostgreSQL | 16-alpine | Database                         | Locked by CLAUDE.md; Docker image used in compose    |
+| Prisma     | 7.0.0     | ORM + migrations                 | Locked by CLAUDE.md                                  |
 
 ### Security & Production Hardening
 
-| Library | Version | Purpose | When to Use | Installation |
-|---------|---------|---------|-------------|--------------|
-| @nestjs/helmet | ^11.0.0 | HTTP security headers (XSS, clickjacking, MIME sniffing) | Every NestJS API in production | `npm install @nestjs/helmet` |
-| @nestjs/throttler | ^5.0.0+ | Rate limiting middleware | Webhook endpoints, auth endpoints | `npm install @nestjs/throttler @nestjs/cache-manager` |
-| nestjs-pino | ^3.6.0+ | Structured JSON logging | Production logging with request context | `npm install nestjs-pino pino pino-pretty` |
-| @nestjs/terminus | ^10.0.0+ | Liveness + readiness probes | Health endpoint (GET /health with DB/Redis checks) | `npm install @nestjs/terminus` |
+| Library           | Version  | Purpose                                                  | When to Use                                        | Installation                                          |
+| ----------------- | -------- | -------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| @nestjs/helmet    | ^11.0.0  | HTTP security headers (XSS, clickjacking, MIME sniffing) | Every NestJS API in production                     | `npm install @nestjs/helmet`                          |
+| @nestjs/throttler | ^5.0.0+  | Rate limiting middleware                                 | Webhook endpoints, auth endpoints                  | `npm install @nestjs/throttler @nestjs/cache-manager` |
+| nestjs-pino       | ^3.6.0+  | Structured JSON logging                                  | Production logging with request context            | `npm install nestjs-pino pino pino-pretty`            |
+| @nestjs/terminus  | ^10.0.0+ | Liveness + readiness probes                              | Health endpoint (GET /health with DB/Redis checks) | `npm install @nestjs/terminus`                        |
 
 ### Supporting
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| node | 22-alpine | Container runtime | Docker multi-stage builds; Alpine reduces image size 90% |
-| redis | 7-alpine | Cache + job queue | Already in docker-compose.yml |
-| nginx | alpine | Reverse proxy + TLS termination | Production reverse proxy (new in Phase 17) |
-| certbot/certbot | latest | Let's Encrypt cert provisioning | HTTPS automation (new in Phase 17) |
+| Library         | Version   | Purpose                         | When to Use                                              |
+| --------------- | --------- | ------------------------------- | -------------------------------------------------------- |
+| node            | 22-alpine | Container runtime               | Docker multi-stage builds; Alpine reduces image size 90% |
+| redis           | 7-alpine  | Cache + job queue               | Already in docker-compose.yml                            |
+| nginx           | alpine    | Reverse proxy + TLS termination | Production reverse proxy (new in Phase 17)               |
+| certbot/certbot | latest    | Let's Encrypt cert provisioning | HTTPS automation (new in Phase 17)                       |
 
 ### Alternatives Considered
 
-| Instead of | Could Use | Tradeoff |
-|------------|-----------|----------|
-| @nestjs/helmet | express-helmet (raw) | Direct Express middleware; less NestJS integration |
-| @nestjs/throttler | express-rate-limit | Manual RedisStore setup; less NestJS patterns |
-| nestjs-pino | winston, tslog | Winston less JSON-first; pino is 2-3x faster |
-| Nginx | Traefik | Traefik: auto-DNS, multi-host; Nginx: widely understood, minimal overhead |
-| certbot | acme.sh | acme.sh lighter; certbot is official Let's Encrypt, better docs |
+| Instead of        | Could Use            | Tradeoff                                                                  |
+| ----------------- | -------------------- | ------------------------------------------------------------------------- |
+| @nestjs/helmet    | express-helmet (raw) | Direct Express middleware; less NestJS integration                        |
+| @nestjs/throttler | express-rate-limit   | Manual RedisStore setup; less NestJS patterns                             |
+| nestjs-pino       | winston, tslog       | Winston less JSON-first; pino is 2-3x faster                              |
+| Nginx             | Traefik              | Traefik: auto-DNS, multi-host; Nginx: widely understood, minimal overhead |
+| certbot           | acme.sh              | acme.sh lighter; certbot is official Let's Encrypt, better docs           |
 
 **Installation (summary):**
+
 ```bash
 npm install @nestjs/helmet @nestjs/throttler nestjs-pino pino pino-pretty @nestjs/terminus
 ```
 
 **Version verification:**
+
 ```bash
 npm view @nestjs/helmet version        # Latest: ~11.0.0
 npm view @nestjs/throttler version     # Latest: ~5.2.0
@@ -198,6 +211,7 @@ npm view @nestjs/terminus version      # Latest: ~10.2.0
 **When to use:** Every NestJS production API. Applied once at bootstrap.
 
 **Example (main.ts):**
+
 ```typescript
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -219,7 +233,7 @@ async function bootstrap() {
   // D-16: CORS — deny all cross-origin by default (Postmark webhooks only in Phase 1)
   app.enableCors({
     origin: [], // Empty array = deny all cross-origin requests
-    credentials: false
+    credentials: false,
   });
 
   // Global /api prefix
@@ -239,14 +253,15 @@ bootstrap();
 **When to use:** Sensitive endpoints (webhooks, auth, password reset, etc.). Configured in AppModule + endpoint decorator.
 
 **Example (app.module.ts):**
+
 ```typescript
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
     ThrottlerModule.forRoot({
-      ttl: 60,           // TTL in seconds
-      limit: 10,         // Max requests per TTL
+      ttl: 60, // TTL in seconds
+      limit: 10, // Max requests per TTL
     }),
     // ... other modules
   ],
@@ -261,12 +276,13 @@ export class AppModule {}
 ```
 
 **Example (webhooks.controller.ts):**
+
 ```typescript
 import { Throttle } from '@nestjs/throttler';
 
 @Controller('webhooks')
 export class WebhooksController {
-  @Throttle({ default: { limit: 10, ttl: 60 } })  // 10 requests per minute
+  @Throttle({ default: { limit: 10, ttl: 60 } }) // 10 requests per minute
   @Post('email')
   async handlePostmarkWebhook(@Body() payload: PostmarkPayloadDto) {
     // Handle webhook
@@ -283,6 +299,7 @@ export class WebhooksController {
 **When to use:** Production logging where logs are shipped to centralized logging system (Datadog, CloudWatch, etc.).
 
 **Example (app.module.ts):**
+
 ```typescript
 import { LoggerModule } from 'nestjs-pino';
 
@@ -304,6 +321,7 @@ export class AppModule {}
 ```
 
 **Example (worker logging):**
+
 ```typescript
 // In IngestionProcessor or any BullMQ handler
 processor = async (job: Job) => {
@@ -327,6 +345,7 @@ processor = async (job: Job) => {
 **When to use:** Production deployments; Docker healthchecks; load balancers; orchestration tools (Kubernetes, Docker Compose depends_on).
 
 **Example (health.controller.ts — using Terminus):**
+
 ```typescript
 import { Controller, Get } from '@nestjs/common';
 import { HealthCheck, HealthCheckService, PrismaHealthIndicator, TypeOrmHealthIndicator } from '@nestjs/terminus';
@@ -343,15 +362,13 @@ export class HealthController {
   @Get()
   @HealthCheck()
   async check() {
-    return this.health.check([
-      async () => this.db.pingDb('prisma'),
-      async () => this.healthService.checkRedis(),
-    ]);
+    return this.health.check([async () => this.db.pingDb('prisma'), async () => this.healthService.checkRedis()]);
   }
 }
 ```
 
 **Example response (200 OK):**
+
 ```json
 {
   "status": "ok",
@@ -366,11 +383,12 @@ export class HealthController {
 ```
 
 **Example (docker-compose.yml healthcheck):**
+
 ```yaml
 services:
   api:
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -386,6 +404,7 @@ services:
 **When to use:** Local development; CI/CD scripts; disaster recovery (backup/restore).
 
 **Example (Makefile):**
+
 ```makefile
 .PHONY: up down reset seed logs test backup restore ngrok migrate-prod ssl-setup deploy
 
@@ -441,13 +460,14 @@ deploy:
 **When to use:** Production deployments. API service does NOT expose port 3000 to host; only Nginx faces internet.
 
 **Example (docker-compose.yml — production):**
+
 ```yaml
 services:
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - letsencrypt:/etc/letsencrypt
@@ -477,19 +497,19 @@ services:
       redis:
         condition: service_healthy
     mem_limit: 512m
-    cpus: "0.5"
+    cpus: '0.5'
     restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
     mem_limit: 1g
-    cpus: "0.5"
+    cpus: '0.5'
     # ... existing config
 
   redis:
     image: redis:7-alpine
     mem_limit: 128m
-    cpus: "0.25"
+    cpus: '0.25'
     # ... existing config
 
 volumes:
@@ -498,6 +518,7 @@ volumes:
 ```
 
 **Example (nginx/nginx.conf):**
+
 ```nginx
 events { worker_connections 1024; }
 
@@ -542,6 +563,7 @@ http {
 ```
 
 **Example (scripts/setup-ssl.sh):**
+
 ```bash
 #!/bin/bash
 set -e
@@ -572,6 +594,7 @@ docker compose restart nginx
 **When to use:** CI/CD automation; testing feature branches before merge; staging deployments.
 
 **Example (Jenkinsfile):**
+
 ```groovy
 pipeline {
   agent any
@@ -637,27 +660,27 @@ pipeline {
 
 ## Don't Hand-Roll
 
-| Problem | Don't Build | Use Instead | Why |
-|---------|-------------|-------------|-----|
-| HTTP security headers | Custom header injection | @nestjs/helmet | Covers 15+ known vulnerabilities; updates with new threats |
-| Rate limiting | Manual request counting + Redis | @nestjs/throttler | Handles distributed scenarios, DDoS patterns, IP extraction |
-| Structured logging | Custom JSON formatter | nestjs-pino or NestJS JSON logger | Per-request context auto-injection; correlation IDs; performance |
-| Health probes | Shell script + curl | @nestjs/terminus + custom indicators | Integrated with NestJS patterns; handles failures gracefully |
-| Reverse proxy | Custom Express middleware | Nginx | Handles connection pooling, TLS offloading, static files, backpressure |
-| Certificate management | Manual certbot commands | Docker certbot service + renewal loop | Automation prevents expiry disasters; renewal every 12h |
-| Database backup | Manual pg_dump calls | Makefile target + cron (Phase 2) | Consistent naming, easy restore, scheduled automation |
+| Problem                | Don't Build                     | Use Instead                           | Why                                                                    |
+| ---------------------- | ------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| HTTP security headers  | Custom header injection         | @nestjs/helmet                        | Covers 15+ known vulnerabilities; updates with new threats             |
+| Rate limiting          | Manual request counting + Redis | @nestjs/throttler                     | Handles distributed scenarios, DDoS patterns, IP extraction            |
+| Structured logging     | Custom JSON formatter           | nestjs-pino or NestJS JSON logger     | Per-request context auto-injection; correlation IDs; performance       |
+| Health probes          | Shell script + curl             | @nestjs/terminus + custom indicators  | Integrated with NestJS patterns; handles failures gracefully           |
+| Reverse proxy          | Custom Express middleware       | Nginx                                 | Handles connection pooling, TLS offloading, static files, backpressure |
+| Certificate management | Manual certbot commands         | Docker certbot service + renewal loop | Automation prevents expiry disasters; renewal every 12h                |
+| Database backup        | Manual pg_dump calls            | Makefile target + cron (Phase 2)      | Consistent naming, easy restore, scheduled automation                  |
 
 **Key insight:** Production hardening is a domain full of edge cases (certificate renewal timing, rate limit bypass patterns, log injection attacks, connection pooling under load). Established libraries handle these; custom code does not.
 
 ## Runtime State Inventory
 
-| Category | Items Found | Action Required |
-|----------|-------------|------------------|
-| Stored data | None — Phase 17 is hardening-only (no schema changes) | No data migration needed |
-| Live service config | None — Makefile targets and Jenkinsfile are version-controlled artifacts | No runtime config changes |
-| OS-registered state | None — Phase 17 deploys new services (Nginx, certbot) but via docker-compose | Docker Compose manages registration |
-| Secrets/env vars | New required: `DOMAIN` (for ssl-setup), `PROD_HOST` (for SSH deploy) | Add to `.env.prod.example`; operator sets at deployment time |
-| Build artifacts | New Docker image layers for Nginx (Alpine ~20MB); certbot image ~100MB | Clean with `docker system prune` if needed |
+| Category            | Items Found                                                                  | Action Required                                              |
+| ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Stored data         | None — Phase 17 is hardening-only (no schema changes)                        | No data migration needed                                     |
+| Live service config | None — Makefile targets and Jenkinsfile are version-controlled artifacts     | No runtime config changes                                    |
+| OS-registered state | None — Phase 17 deploys new services (Nginx, certbot) but via docker-compose | Docker Compose manages registration                          |
+| Secrets/env vars    | New required: `DOMAIN` (for ssl-setup), `PROD_HOST` (for SSH deploy)         | Add to `.env.prod.example`; operator sets at deployment time |
+| Build artifacts     | New Docker image layers for Nginx (Alpine ~20MB); certbot image ~100MB       | Clean with `docker system prune` if needed                   |
 
 **Summary:** Phase 17 is pure infrastructure and artifact creation; no existing runtime state is modified.
 
@@ -670,12 +693,14 @@ pipeline {
 **Why it happens:** Prisma.$transaction callback passes a tx parameter, but tests don't mock all expected methods on tx. Phase 16 added atomic updates using `await prisma.$transaction(async (tx) => { await tx.candidate.updateMany(...) })`, but test mocks were incomplete.
 
 **How to avoid:**
+
 1. When mocking `$transaction`, create a txClient object with ALL Prisma delegates (candidate, job, application, etc.)
 2. Copy mock return values from main prisma mock
 3. Test the transaction callback directly by passing a complete txClient mock
 4. Verify test calls both `prisma.$transaction` AND the methods on txClient
 
 **Example (correct mock):**
+
 ```typescript
 const txClient = {
   candidate: { updateMany: jest.fn().mockResolvedValue({}) },
@@ -699,17 +724,19 @@ prisma = {
 **Why it happens:** Phase 15 changed job matching logic to use shortId lookup, and Phase 16 may have changed job status filtering. Tests weren't updated to match the new behavior.
 
 **How to avoid:**
+
 1. Check CONTEXT.md and PROTOCOL.md for the authoritative job status values
 2. Verify the implementation against the spec before mocking expectations
 3. Use `expect.objectContaining()` instead of exact equality for Prisma queries (more resilient)
 4. Run tests first; see what the actual calls are; then adjust expectations to match reality
 
 **Example (resilient test):**
+
 ```typescript
 expect(prisma.job.findMany).toHaveBeenCalledWith(
   expect.objectContaining({
-    where: expect.objectContaining({ tenantId: 'test-tenant-id' })
-  })
+    where: expect.objectContaining({ tenantId: 'test-tenant-id' }),
+  }),
 );
 ```
 
@@ -722,12 +749,14 @@ expect(prisma.job.findMany).toHaveBeenCalledWith(
 **Why it happens:** E2E tests need a real database (or test database container). Simply importing modules and mocking services doesn't provide a real DB connection.
 
 **How to avoid:**
+
 1. E2E tests must use a real test database or TestContainers
 2. Alternatively, mock the health indicators in E2E tests to return fixed responses
 3. Create a shared E2E test setup that spins up Docker Compose test services
 4. Or: Keep health endpoint logic simple enough that unit tests verify DB probe code, and E2E just tests the HTTP response format
 
 **Example (mocked E2E):**
+
 ```typescript
 describe('Health endpoint (E2E)', () => {
   let app: INestApplication;
@@ -766,12 +795,14 @@ describe('Health endpoint (E2E)', () => {
 **Why it happens:** Nginx config is hand-written for each deployment; small typos break it. Not caught until container starts.
 
 **How to avoid:**
+
 1. Use `nginx -t` to validate config before deploying
 2. Add a `docker compose up nginx` step after writing nginx.conf to catch errors early
 3. Use a minimal, tested template (provide in scripts/nginx-template.conf)
 4. Document each section of nginx.conf with comments explaining what it does
 
 **Example (validation):**
+
 ```bash
 docker compose run --rm nginx nginx -t -c /etc/nginx/nginx.conf
 # If exits 0, config is valid; safe to deploy
@@ -786,6 +817,7 @@ docker compose run --rm nginx nginx -t -c /etc/nginx/nginx.conf
 **Why it happens:** Certbot renewal depends on correct volume mounts, web root directory, and certbot's ability to write to /etc/letsencrypt. If any step is wrong, renewal silently fails and certificate expires after 90 days.
 
 **How to avoid:**
+
 1. Use the standard certbot Docker image with well-tested patterns (see docker-compose.yml example)
 2. Mount `/etc/letsencrypt` as a named volume (not host path) for consistency
 3. Test renewal manually once before relying on automated renewal
@@ -793,6 +825,7 @@ docker compose run --rm nginx nginx -t -c /etc/nginx/nginx.conf
 5. Run certbot renewal in a container that logs to stdout (visible in docker compose logs)
 
 **Example (renewal check):**
+
 ```bash
 docker compose exec certbot certbot renew --dry-run
 # Should exit 0; any failure visible immediately
@@ -986,9 +1019,7 @@ describe('Health endpoint (E2E)', () => {
     });
 
     it('should boot the app without errors', () => {
-      return request(app.getHttpServer())
-        .get('/health')
-        .expect(200);
+      return request(app.getHttpServer()).get('/health').expect(200);
     });
   });
 });
@@ -1045,18 +1076,19 @@ ssh "$PROD_HOST" bash -c '
 
 ## State of the Art
 
-| Old Approach | Current Approach | When Changed | Impact |
-|--------------|------------------|--------------|--------|
-| Custom error headers | @nestjs/helmet | 2020+ | Eliminates manual header management; auto-updates with threat landscape |
-| Manual rate limiting with Redis | @nestjs/throttler | 2021+ | Built-in DDoS protection; per-endpoint configuration |
-| Console logs (plain text) | Structured JSON logging (pino) | 2021+ | Enables log aggregation; correlation IDs; performance (3x faster) |
-| Shell scripts for health checks | @nestjs/terminus + custom | 2021+ | Integrated with NestJS; handles failures gracefully |
-| Docker healthcheck script | Docker HEALTHCHECK instruction | 2016+ | Orchestration tools (Docker Compose, K8s) can auto-restart failing containers |
-| Manual SSL cert renewal | Certbot + automation | 2015+ | Eliminates expiry disasters; standard across industry |
-| Traefik as reverse proxy | Nginx (simpler ops) | 2023+ | Nginx is more widely understood; Traefik overkill for single-domain Phase 1 |
-| Multi-stage Dockerfile | Same pattern (builder + runner) | 2017+ | Reduces image size 50-70%; widely adopted standard |
+| Old Approach                    | Current Approach                | When Changed | Impact                                                                        |
+| ------------------------------- | ------------------------------- | ------------ | ----------------------------------------------------------------------------- |
+| Custom error headers            | @nestjs/helmet                  | 2020+        | Eliminates manual header management; auto-updates with threat landscape       |
+| Manual rate limiting with Redis | @nestjs/throttler               | 2021+        | Built-in DDoS protection; per-endpoint configuration                          |
+| Console logs (plain text)       | Structured JSON logging (pino)  | 2021+        | Enables log aggregation; correlation IDs; performance (3x faster)             |
+| Shell scripts for health checks | @nestjs/terminus + custom       | 2021+        | Integrated with NestJS; handles failures gracefully                           |
+| Docker healthcheck script       | Docker HEALTHCHECK instruction  | 2016+        | Orchestration tools (Docker Compose, K8s) can auto-restart failing containers |
+| Manual SSL cert renewal         | Certbot + automation            | 2015+        | Eliminates expiry disasters; standard across industry                         |
+| Traefik as reverse proxy        | Nginx (simpler ops)             | 2023+        | Nginx is more widely understood; Traefik overkill for single-domain Phase 1   |
+| Multi-stage Dockerfile          | Same pattern (builder + runner) | 2017+        | Reduces image size 50-70%; widely adopted standard                            |
 
 **Deprecated/outdated:**
+
 - Custom middleware for security headers (superseded by helmet)
 - Manual per-endpoint rate limiting (superseded by @nestjs/throttler)
 - Logging to files on disk (superseded by structured JSON to stdout → Docker logs → log aggregation)
@@ -1091,22 +1123,24 @@ ssh "$PROD_HOST" bash -c '
 
 ## Environment Availability
 
-| Dependency | Required By | Available | Version | Fallback |
-|------------|------------|-----------|---------|----------|
-| Docker | Docker Compose files | ✓ (installed) | 24.0.7 | — |
-| Docker Compose | Makefile targets, local dev | ✓ (installed) | 2.25.0 | — |
-| PostgreSQL | Database | ✓ (16-alpine image) | 16 | — |
-| Redis | Cache + job queue | ✓ (7-alpine image) | 7 | — |
-| Nginx | Reverse proxy | ✓ (nginx:alpine image) | latest | None (required for prod) |
-| Certbot | SSL cert provisioning | ✓ (certbot/certbot image) | latest | Manual cert management |
-| Node.js | Runtime | ✓ (22-alpine for prod) | 22 | — |
-| Git | Source control | ✓ (needed for deploy.sh SSH) | 2.30+ | — |
-| curl/wget | Health checks in Docker | ✓ (via shell CMD HEALTHCHECK) | — | Use via base image |
+| Dependency     | Required By                 | Available                     | Version | Fallback                 |
+| -------------- | --------------------------- | ----------------------------- | ------- | ------------------------ |
+| Docker         | Docker Compose files        | ✓ (installed)                 | 24.0.7  | —                        |
+| Docker Compose | Makefile targets, local dev | ✓ (installed)                 | 2.25.0  | —                        |
+| PostgreSQL     | Database                    | ✓ (16-alpine image)           | 16      | —                        |
+| Redis          | Cache + job queue           | ✓ (7-alpine image)            | 7       | —                        |
+| Nginx          | Reverse proxy               | ✓ (nginx:alpine image)        | latest  | None (required for prod) |
+| Certbot        | SSL cert provisioning       | ✓ (certbot/certbot image)     | latest  | Manual cert management   |
+| Node.js        | Runtime                     | ✓ (22-alpine for prod)        | 22      | —                        |
+| Git            | Source control              | ✓ (needed for deploy.sh SSH)  | 2.30+   | —                        |
+| curl/wget      | Health checks in Docker     | ✓ (via shell CMD HEALTHCHECK) | —       | Use via base image       |
 
 **Missing dependencies with no fallback:**
+
 - Nginx is required for production HTTPS termination (no fallback)
 
 **Missing dependencies with fallback:**
+
 - Certbot has fallback: manual `certbot certonly` command on server (documented in scripts/setup-ssl.sh)
 
 **Summary:** All required dependencies are available or have viable fallbacks. Phase 17 can proceed.
@@ -1115,25 +1149,25 @@ ssh "$PROD_HOST" bash -c '
 
 ### Test Framework
 
-| Property | Value |
-|----------|-------|
-| Framework | Jest 30.0.0 + ts-jest 29.2.5 |
-| Config file | `jest.config.js` in package.json (already configured) |
-| E2E Config | `test/jest-e2e.json` (existing) |
-| Quick run command | `npm run test` (runs unit tests in ~2s) |
-| Full suite command | `npm run test:e2e` (runs E2E tests with app boot) |
+| Property           | Value                                                 |
+| ------------------ | ----------------------------------------------------- |
+| Framework          | Jest 30.0.0 + ts-jest 29.2.5                          |
+| Config file        | `jest.config.js` in package.json (already configured) |
+| E2E Config         | `test/jest-e2e.json` (existing)                       |
+| Quick run command  | `npm run test` (runs unit tests in ~2s)               |
+| Full suite command | `npm run test:e2e` (runs E2E tests with app boot)     |
 
 ### Phase Requirements → Test Map
 
-| Req ID | Behavior | Test Type | Automated Command | File Exists? |
-|--------|----------|-----------|-------------------|-------------|
-| D-10 | All failing unit tests fixed (6 failures) | unit | `npm run test -- src/jobs/jobs.integration.spec.ts src/ingestion/ingestion.processor.spec.ts` | ✅ (failing now) |
-| D-11 | E2E: GET /health returns 200 with status | e2e | `npm run test:e2e -- test/app.e2e-spec.ts` | ❌ (health test not in E2E yet) |
-| D-12 | `make test` runs jest in Docker | shell | `make test` | ❌ (Makefile doesn't exist) |
-| D-14 | Helmet middleware applied globally | unit | `npm run test -- src/app.module.spec.ts` | ❌ (helmut tests to add) |
-| D-15 | Throttler rate limits webhook endpoint | unit | `npm run test -- src/webhooks/webhooks.controller.spec.ts` | ❌ (throttler tests to add) |
-| D-21/D-22 | Health endpoint responds to /health | e2e | `npm run test:e2e -- test/app.e2e-spec.ts` | ❌ (new test) |
-| D-23 | Structured JSON logging (pino) | unit | `npm run test -- src/logging/logging.spec.ts` | ❌ (logging module to add) |
+| Req ID    | Behavior                                  | Test Type | Automated Command                                                                             | File Exists?                    |
+| --------- | ----------------------------------------- | --------- | --------------------------------------------------------------------------------------------- | ------------------------------- |
+| D-10      | All failing unit tests fixed (6 failures) | unit      | `npm run test -- src/jobs/jobs.integration.spec.ts src/ingestion/ingestion.processor.spec.ts` | ✅ (failing now)                |
+| D-11      | E2E: GET /health returns 200 with status  | e2e       | `npm run test:e2e -- test/app.e2e-spec.ts`                                                    | ❌ (health test not in E2E yet) |
+| D-12      | `make test` runs jest in Docker           | shell     | `make test`                                                                                   | ❌ (Makefile doesn't exist)     |
+| D-14      | Helmet middleware applied globally        | unit      | `npm run test -- src/app.module.spec.ts`                                                      | ❌ (helmut tests to add)        |
+| D-15      | Throttler rate limits webhook endpoint    | unit      | `npm run test -- src/webhooks/webhooks.controller.spec.ts`                                    | ❌ (throttler tests to add)     |
+| D-21/D-22 | Health endpoint responds to /health       | e2e       | `npm run test:e2e -- test/app.e2e-spec.ts`                                                    | ❌ (new test)                   |
+| D-23      | Structured JSON logging (pino)            | unit      | `npm run test -- src/logging/logging.spec.ts`                                                 | ❌ (logging module to add)      |
 
 ### Sampling Rate
 
@@ -1156,7 +1190,7 @@ ssh "$PROD_HOST" bash -c '
 - [ ] `scripts/setup-ssl.sh` — create SSL provisioning script
 - [ ] `README.md` — rewrite as developer onboarding guide
 
-*If no gaps: Test infrastructure is ready for Phase 17 work. Unit + E2E tests cover all major hardening domains.*
+_If no gaps: Test infrastructure is ready for Phase 17 work. Unit + E2E tests cover all major hardening domains._
 
 ## Sources
 
@@ -1189,6 +1223,7 @@ ssh "$PROD_HOST" bash -c '
 ## Metadata
 
 **Confidence breakdown:**
+
 - Standard stack: **HIGH** — All libraries verified installed; versions current as of 2026-03-31
 - Architecture patterns: **HIGH** — Official docs + working examples from 2024-2026 sources
 - Pitfalls: **HIGH** — Based on actual failing tests (6 failures) and common production issues
@@ -1199,6 +1234,7 @@ ssh "$PROD_HOST" bash -c '
 **Valid until:** 2026-04-30 (stable libraries; minor updates may appear)
 
 **Key assumptions validated:**
+
 - ✅ All required npm packages exist and are recent versions
 - ✅ NestJS 11 + Prisma 7 are locked by CLAUDE.md
 - ✅ Docker + Docker Compose are installed on dev machine
@@ -1209,4 +1245,4 @@ ssh "$PROD_HOST" bash -c '
 
 ---
 
-*Research completed: 2026-03-31 by GSD Phase Researcher*
+_Research completed: 2026-03-31 by GSD Phase Researcher_

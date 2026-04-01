@@ -23,11 +23,11 @@ affects: [deployment, onboarding, ci-cd, hetzner-vps, jenkins-setup]
 tech-stack:
   added: []
   patterns:
-    - "Makefile wraps docker compose commands with named targets for discoverability"
-    - "Jenkins parameterized build with BRANCH_NAME — single Jenkinsfile serves main, feature, and staging branches"
-    - "Deploy is always a manual human action — CI gates only, no auto-deploy"
-    - "make up auto-migrates (prisma migrate deploy) but make seed is opt-in"
-    - "backups/ is gitignored — local dumps only, never committed"
+    - 'Makefile wraps docker compose commands with named targets for discoverability'
+    - 'Jenkins parameterized build with BRANCH_NAME — single Jenkinsfile serves main, feature, and staging branches'
+    - 'Deploy is always a manual human action — CI gates only, no auto-deploy'
+    - 'make up auto-migrates (prisma migrate deploy) but make seed is opt-in'
+    - 'backups/ is gitignored — local dumps only, never committed'
 
 key-files:
   created:
@@ -40,15 +40,15 @@ key-files:
     - scripts/ngrok-webhook.sh
 
 key-decisions:
-  - "make up auto-migrates on every start — safe because prisma migrate deploy is idempotent"
-  - "make test runs jest inside Docker (not local npm) so test environment matches Jenkins exactly"
-  - "Jenkinsfile has BRANCH_NAME param defaulting to main — staging branches work without a second Jenkinsfile"
-  - "deploy.sh requires PROD_HOST env var set by caller — not hardcoded, safe to commit"
-  - "Migrations are never automatic on prod container start — always via explicit make migrate-prod (D-07)"
+  - 'make up auto-migrates on every start — safe because prisma migrate deploy is idempotent'
+  - 'make test runs jest inside Docker (not local npm) so test environment matches Jenkins exactly'
+  - 'Jenkinsfile has BRANCH_NAME param defaulting to main — staging branches work without a second Jenkinsfile'
+  - 'deploy.sh requires PROD_HOST env var set by caller — not hardcoded, safe to commit'
+  - 'Migrations are never automatic on prod container start — always via explicit make migrate-prod (D-07)'
 
 patterns-established:
-  - "Makefile as the single entry point for all local dev operations"
-  - "CI pipeline: Build + Test only. Deploy = manual SSH action."
+  - 'Makefile as the single entry point for all local dev operations'
+  - 'CI pipeline: Build + Test only. Deploy = manual SSH action.'
 
 requirements-completed:
   - D-01
@@ -138,5 +138,6 @@ Phase 17 is complete. All CI/CD artifacts are ready for when the Hetzner VPS and
 - Deploy with `PROD_HOST=ubuntu@server ./scripts/deploy.sh main`
 
 ---
-*Phase: 17-production-deployment-readiness-fix-tests-add-sanity-checks-and-prepare-ci-cd-for-hetzner-jenkins*
-*Completed: 2026-04-01*
+
+_Phase: 17-production-deployment-readiness-fix-tests-add-sanity-checks-and-prepare-ci-cd-for-hetzner-jenkins_
+_Completed: 2026-04-01_

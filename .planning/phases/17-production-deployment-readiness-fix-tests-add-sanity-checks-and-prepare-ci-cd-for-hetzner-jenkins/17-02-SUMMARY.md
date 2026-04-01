@@ -123,14 +123,16 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 3 - Blocking] Added @openrouter/sdk mock to jest-e2e.json to unblock E2E test**
+
 - **Found during:** Task 2 (E2E smoke test)
 - **Issue:** @openrouter/sdk is an ESM module, causing `SyntaxError: Unexpected token 'export'` when Jest tried to load AppModule in E2E tests
-- **Fix:** Added moduleNameMapper to test/jest-e2e.json and created test/__mocks__/@openrouter/sdk.js
-- **Files modified:** test/jest-e2e.json, test/__mocks__/@openrouter/sdk.js
+- **Fix:** Added moduleNameMapper to test/jest-e2e.json and created test/**mocks**/@openrouter/sdk.js
+- **Files modified:** test/jest-e2e.json, test/**mocks**/@openrouter/sdk.js
 - **Verification:** npm run test:e2e passes — 1 test passing
 - **Committed in:** 464e2ba (Task 2 commit)
 
 **2. [Rule 1 - Bug] Fixed pre-existing test assertions using wrong job status value**
+
 - **Found during:** Task 3 (IngestionProcessor tests)
 - **Issue:** Two tests in ingestion.processor.spec.ts expected `status: 'active'` but production code queries `status: 'open'`
 - **Fix:** Changed both occurrences to `status: 'open'` to match the actual query in extractAllJobIdsFromEmailText()
@@ -169,5 +171,6 @@ None - no external service configuration required.
 - FOUND commit: 77fc92d (Task 3)
 
 ---
-*Phase: 17-production-deployment-readiness-fix-tests-add-sanity-checks-and-prepare-ci-cd-for-hetzner-jenkins*
-*Completed: 2026-03-31*
+
+_Phase: 17-production-deployment-readiness-fix-tests-add-sanity-checks-and-prepare-ci-cd-for-hetzner-jenkins_
+_Completed: 2026-03-31_

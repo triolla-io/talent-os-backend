@@ -97,6 +97,7 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 2 - Missing Critical] Fixed plain-string BadRequestException in candidates.service**
+
 - **Found during:** Task 3 (API sanity review)
 - **Issue:** 4 `BadRequestException` calls in candidates.service used plain strings instead of structured `{ error: { code, message } }` format — violates PROTOCOL.md error contract
 - **Fix:** Replaced all 4 with structured objects using error codes: `NO_JOB`, `STAGE_NOT_FOUND`, `LAST_STAGE`
@@ -105,6 +106,7 @@ Each task was committed atomically:
 - **Committed in:** `10a77bb` (Task 3 commit)
 
 **2. [Rule 2 - Missing Critical] Added ThrottlerModule to controller test module**
+
 - **Found during:** Task 2 (apply ThrottlerGuard)
 - **Issue:** After adding `ThrottlerGuard` to webhooks controller, the controller unit test couldn't resolve `ThrottlerGuard` dependency — 2 test failures
 - **Fix:** Added `ThrottlerModule.forRoot` import to the test module setup
@@ -133,5 +135,6 @@ None — all changes are production-quality. No placeholder values or hardcoded 
 - Remaining work: Pre-existing 4 jobs integration test failures should be addressed before production
 
 ---
-*Phase: 17-production-deployment-readiness-fix-tests-add-sanity-checks-and-prepare-ci-cd-for-hetzner-jenkins*
-*Completed: 2026-04-01*
+
+_Phase: 17-production-deployment-readiness-fix-tests-add-sanity-checks-and-prepare-ci-cd-for-hetzner-jenkins_
+_Completed: 2026-04-01_
