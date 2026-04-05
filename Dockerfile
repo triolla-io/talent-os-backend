@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Copy dependency manifests first for layer caching
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci
 
 # Copy source and compile TypeScript
