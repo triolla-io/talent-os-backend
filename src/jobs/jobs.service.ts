@@ -86,16 +86,15 @@ export class JobsService {
       order: q.order ?? i + 1,
     }));
 
-    // Generate shortId: extract first letters of title words + random suffix
-    const titleWords = dto.title.split(/\s+/).filter((w) => w.length > 0);
-    const prefix = titleWords
-      .map((word) => word.charAt(0).toUpperCase())
-      .join('')
-      .substring(0, 10); // Cap at 10 chars
-    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const shortId = `${prefix}-${randomSuffix}`;
-
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}))`;
+      const [{ max }] = await tx.$queryRaw<[{ max: string | null }]>`
+        SELECT MAX(CAST(short_id AS INTEGER)) as max FROM "jobs"
+        WHERE tenant_id = ${tenantId} AND short_id ~ '^[0-9]+$'
+      `;
+      const nextId = max ? parseInt(max, 10) + 1 : 100;
+      const shortId = nextId.toString();
+
       const job = await tx.job.create({
         data: {
           tenantId,

@@ -88,7 +88,7 @@ async function main() {
   const jobs = [
     {
       id: JOB_SE,
-      shortId: 'SSE-1',
+      shortId: '100',
       title: 'Senior Software Engineer',
       department: 'Engineering',
       location: 'Tel Aviv, Israel',
@@ -112,7 +112,7 @@ async function main() {
     },
     {
       id: JOB_PM,
-      shortId: 'PM-1',
+      shortId: '101',
       title: 'Product Manager',
       department: 'Product',
       location: 'Tel Aviv, Israel',
@@ -135,7 +135,7 @@ async function main() {
     },
     {
       id: JOB_DS,
-      shortId: 'DS-1',
+      shortId: '102',
       title: 'Data Scientist',
       department: 'Engineering',
       location: 'Haifa, Israel',

@@ -65,7 +65,6 @@ export class IngestionProcessor extends WorkerHost {
       },
     });
 
-    console.log({ activeJobs, subject, body });
 
     if (activeJobs.length === 0) {
       return [];
