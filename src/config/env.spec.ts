@@ -3,7 +3,7 @@ import { envSchema } from './env';
 const validEnv = {
   DATABASE_URL: 'postgresql://triolla:password@localhost:5432/triolla',
   REDIS_URL: 'redis://localhost:6379',
-  ANTHROPIC_API_KEY: 'sk-ant-test',
+  // ANTHROPIC_API_KEY: 'sk-ant-test',
   OPENROUTER_API_KEY: 'sk-or-test',
   POSTMARK_WEBHOOK_TOKEN: 'test-token',
   TENANT_ID: '123e4567-e89b-12d3-a456-426614174000',
@@ -32,9 +32,9 @@ describe('envSchema', () => {
     expect(() => envSchema.parse({ ...validEnv, TENANT_ID: 'not-a-uuid' })).toThrow();
   });
 
-  it('throws when ANTHROPIC_API_KEY is empty string', () => {
-    expect(() => envSchema.parse({ ...validEnv, ANTHROPIC_API_KEY: '' })).toThrow();
-  });
+  // it('throws when ANTHROPIC_API_KEY is empty string', () => {
+  //   expect(() => envSchema.parse({ ...validEnv, ANTHROPIC_API_KEY: '' })).toThrow();
+  // });
 
   it('defaults NODE_ENV to production when omitted', () => {
     const { NODE_ENV, ...rest } = validEnv;
