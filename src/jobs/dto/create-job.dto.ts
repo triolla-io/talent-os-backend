@@ -58,4 +58,4 @@ export const CreateJobSchema = z
     },
   );
 
-export type CreateJobDto = z.infer<typeof CreateJobSchema>;
+export type CreateJobDto = z.input<typeof CreateJobSchema>;

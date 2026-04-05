@@ -15,6 +15,8 @@ const mockPrismaService = {
     findFirstOrThrow: jest.fn(),
   },
   $transaction: jest.fn(),
+  $executeRaw: jest.fn().mockResolvedValue(undefined),
+  $queryRaw: jest.fn().mockResolvedValue([{ max: null }]),
 };
 
 const mockConfigService = {
