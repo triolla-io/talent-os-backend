@@ -1,4 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { CANDIDATE_SOURCES } from '../../candidates/dto/create-candidate.dto';
+
+const SOURCE_LABELS: Record<(typeof CANDIDATE_SOURCES)[number], string> = {
+  linkedin: 'LinkedIn',
+  website: 'Website',
+  agency: 'Agency',
+  referral: 'Referral',
+  direct: 'Direct',
+  manual: 'Manual',
+};
 
 @Injectable()
 export class AppConfigService {
@@ -35,6 +45,7 @@ export class AppConfigService {
         { name: 'Pending Decision', is_enabled: false, color: 'bg-yellow-400', is_custom: false, order: 7 },
         { name: 'On Hold', is_enabled: false, color: 'bg-gray-500', is_custom: false, order: 8 },
       ],
+      candidate_sources: CANDIDATE_SOURCES.map((id) => ({ id, label: SOURCE_LABELS[id] })),
     };
   }
 }

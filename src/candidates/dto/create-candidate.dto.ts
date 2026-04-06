@@ -1,12 +1,22 @@
 import { z } from 'zod';
 
+export const CANDIDATE_SOURCES = [
+  'linkedin',
+  'website',
+  'agency',
+  'referral',
+  'direct',
+  'manual',
+] as const;
+
+export type CandidateSource = (typeof CANDIDATE_SOURCES)[number];
+
 export const CreateCandidateSchema = z.object({
   // Required fields
   full_name: z.string().min(1, 'Full name is required'),
-  source: z.enum(
-    ['linkedin', 'website', 'agency', 'referral', 'direct', 'manual'],
-    'Source must be one of: linkedin, website, agency, referral, direct, manual',
-  ),
+  source: z.enum(CANDIDATE_SOURCES, {
+    message: 'Source must be one of: linkedin, website, agency, referral, direct, manual',
+  }),
   job_id: z
     .string()
     .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'job_id must be a valid UUID'),
