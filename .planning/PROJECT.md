@@ -52,7 +52,7 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 ## Context
 
 - **Scale:** ~500 CVs/month (~17/day). Low throughput. Performance is not a constraint.
-- **AI cost:** ~$6–16/month total (Haiku for extraction, Sonnet for scoring, PostgreSQL for dedup — no LLM cost).
+- **AI cost:** ~$6–16/month total (openai/gpt-4o-mini for extraction and scoring via OpenRouter, PostgreSQL for dedup — no LLM cost).
 - **Infra cost:** ~€5/month on Hetzner CX21 (2 vCPU, 4GB RAM). Stack uses ~1.5–2GB RAM without Ollama.
 - **Spec:** Full architecture is documented in `spec/backend-architecture-proposal.md` (approved 2026-03-19).
 - **DB schema:** 7 tables — `tenants`, `jobs`, `candidates`, `applications`, `candidate_job_scores`, `duplicate_flags`, `email_intake_log`.
@@ -61,8 +61,8 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 
 ## Constraints
 
-- **Tech Stack:** TypeScript only, NestJS 11, BullMQ + Redis, Prisma 6, PostgreSQL 16, Vercel AI SDK — locked, not negotiable
-- **AI Provider:** Anthropic Claude via `@ai-sdk/anthropic` — Haiku for extraction, Sonnet for scoring. No local models in Phase 1.
+- **Tech Stack:** TypeScript only, NestJS 11, BullMQ + Redis, Prisma 7, PostgreSQL 16 — locked, not negotiable
+- **AI Provider:** OpenRouter via `@openrouter/sdk` — currently `openai/gpt-4o-mini` for both extraction and scoring
 - **Storage:** Cloudflare R2 for original CV files (S3-compatible, 10GB free tier)
 - **Email:** Postmark Inbound webhooks — no Gmail API polling in Phase 1
 - **Dedup:** pg_trgm in PostgreSQL only — no in-memory fuzzy matching, no vector DB
@@ -79,20 +79,25 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 | pg_trgm for dedup over vector DB | Fuzzy matching in DB, no memory loading, scales naturally, zero extra infra | — Pending |
 | Never auto-upsert on fuzzy match | Fuzzy match could be two different people — auto-merge silently corrupts data | — Pending |
 | Cloudflare R2 for file storage | Postmark drops attachments after delivery — must persist on intake | — Pending |
-| Vercel AI SDK over raw Anthropic SDK | One-line model swap (Haiku→Sonnet→Ollama) without touching agent logic | — Pending |
+| @openrouter/sdk over Vercel AI SDK | Single provider for all models, no per-model SDK, easy model swap via model string | Adopted in Phase 14 (260324-agv) |
 | Hetzner VPS over AWS | ~€5/month vs ~$15/month; Docker Compose is identical on both — migrate later if needed | — Pending |
 | Prisma over raw SQL / Drizzle | Schema as single source of truth, type-safe, clean migration tooling | — Pending |
 | Zod for all structured AI outputs | Type-safe AI responses; same schema used for validation and TypeScript types | — Pending |
 
 ## Current State
 
-**Phase 11 Complete (2026-03-25):** API Protocol MVP Specification
-- Job management endpoints implemented: GET /config, GET /jobs, POST /jobs, PUT /jobs/:id, DELETE /jobs/:id
-- Database schema extended: JobStage (interviewer, is_enabled, color), ScreeningQuestion (expected_answer)
-- Atomic transactions + default 4-stage seeding for job creation
-- Tenant isolation on all endpoints via TENANT_ID config
-- 195 tests passing; all must-haves verified (Phase 2 UI can build on this contract)
-- Ready for Phase 2: Recruiter authentication, admin UI, candidate management
+**Phase 17 Complete (2026-04-01):** Production Deployment Readiness
+- Health endpoint GET /health (DB + Redis probes), structured JSON logging (nestjs-pino), security middleware (helmet, throttler, CORS deny-all)
+- GitHub Actions CI pipeline, docker-compose hardened (resource limits, healthchecks)
+- README rewritten as complete developer onboarding documentation
+- 250 tests passing across 20 suites
+
+**Earlier milestones completed:**
+- Phase 14: OpenRouter extraction pipeline (real LLM calls replacing mock)
+- Phase 15: Deterministic Job ID routing (regex + shortId lookup, removed semantic matching)
+- Phase 16: Manual routing & UI parity (PATCH /candidates/:id reassignment, unassigned filter, shortId/sourceAgency in responses)
+- Phase 12: Add candidate from UI (POST /candidates endpoint with R2 upload)
+- Phase 13: Kanban board candidate hiring stage tracking
 
 ## Evolution
 
@@ -112,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after Phase 9 completion — all 9 phases complete, v1.0 milestone done*
+*Last updated: 2026-04-06 after Phase 17 completion — all 17 phases complete, milestone done*
