@@ -21,21 +21,21 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 
 - [x] Spam pre-filter discards obvious non-CV emails before any LLM call — *Validated in Phase 3: Processing Pipeline*
 - [x] PDF and DOCX attachments are parsed to plain text (pdf-parse + mammoth) — *Validated in Phase 3*
-- [x] Agent 1 (Haiku): ExtractionAgentService with CandidateExtractSchema (8 fields, Zod), mock extract() wired into IngestionProcessor with fullName failure handling — *Validated in Phase 4: AI Extraction*
+- [x] Agent 1 (openai/gpt-4o-mini via OpenRouter): ExtractionAgentService with CandidateExtractSchema (8 fields, Zod), extract() wired into IngestionProcessor with fullName failure handling — *Validated in Phase 4 (mock), real calls enabled in Phase 14*
 - [x] API and Worker run as separate processes (separate Docker containers) — CPU-heavy work never blocks webhook receipt — *Validated in Phase 8: Phase 1 Verification*
 - [x] Environment variables validated at startup via @nestjs/config + Zod — *Validated in Phase 8: Phase 1 Verification*
 - [x] Docker Compose runs identically locally and on Hetzner VPS — *Validated in Phase 8: Phase 1 Verification*
 
-### Active
+### Active (Validated)
 
-- [ ] Postmark inbound webhook receives CV emails and verifies HMAC-SHA256 signature
-- [ ] Idempotency: duplicate webhook deliveries are detected via `MessageID` and silently skipped
-- [ ] Agent 1 (Haiku): real Anthropic generateObject call enabled (scaffolded in Phase 4, activated in Phase 5+)
+- [x] Postmark inbound webhook receives CV emails and verifies HMAC-SHA256 signature — *Validated in Phase 2*
+- [x] Idempotency: duplicate webhook deliveries are detected via `MessageID` and silently skipped — *Validated in Phase 2*
+- [x] Agent 1 (openai/gpt-4o-mini via OpenRouter): real API call enabled — @openrouter/sdk with JSON mode (completed Phase 14, quick task 260324-agv)
 - [x] Original CV file is uploaded to Cloudflare R2 before dedup (Postmark does not retain attachments) — *Validated in Phase 5: File Storage*
 - [x] Duplicate detection runs in PostgreSQL via pg_trgm — no candidates loaded into memory — *Validated in Phase 6: Duplicate Detection*
 - [x] Exact email match → UPSERT; fuzzy match → INSERT new + `duplicate_flags` row for human review — *Validated in Phase 6*
-- [ ] Agent 2 (Sonnet): scores candidate against each active job; results stored append-only in `candidate_job_scores`
-- [ ] Multi-tenant schema from day 1: `tenant_id` on every table; Phase 1 has exactly one tenant
+- [x] Agent 2 (openai/gpt-4o-mini via OpenRouter): scores candidate against each active job; results stored append-only in `candidate_job_scores` — *Validated in Phase 7*
+- [x] Multi-tenant schema from day 1: `tenant_id` on every table; Phase 1 has exactly one tenant — *Validated in Phase 1 (DB-02)*
 
 ### Out of Scope
 

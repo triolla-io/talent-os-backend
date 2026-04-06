@@ -25,7 +25,7 @@
 
 ### AI Extraction
 
-- [x] **AIEX-01**: Agent 1 (claude-haiku-4-5) extracts structured candidate fields from email + CV text using Vercel AI SDK `generateObject` + Zod schema
+- [x] **AIEX-01**: Agent 1 (openai/gpt-4o-mini via OpenRouter) extracts structured candidate fields from email + CV text using @openrouter/sdk with JSON mode + Zod schema
 - [x] **AIEX-02**: Extracted schema includes: `fullName`, `email`, `phone`, `currentRole`, `yearsExperience`, `skills[]`, `summary` (2-sentence AI summary), `source` enum
 - [x] **AIEX-03**: All extracted fields are nullable (except `fullName`) — agent never throws on missing fields
 
@@ -54,9 +54,9 @@
 
 - [x] **SCOR-01**: Scoring processor fetches all active jobs for the tenant from `jobs` table (`WHERE status = 'active'`)
 - [x] **SCOR-02**: Scoring processor upserts an `applications` row (`stage = 'new'`) for each candidate-job pair before scoring — idempotent on retry
-- [x] **SCOR-03**: Agent 2 (claude-sonnet-4-6) scores candidate against each active job and returns: `score` (0–100), `reasoning`, `strengths[]`, `gaps[]`
+- [x] **SCOR-03**: Agent 2 (openai/gpt-4o-mini via OpenRouter) scores candidate against each active job and returns: `score` (0–100), `reasoning`, `strengths[]`, `gaps[]`
 - [x] **SCOR-04**: Score result is inserted append-only into `candidate_job_scores` — existing scores are never updated
-- [x] **SCOR-05**: `candidate_job_scores` records the `model_used` string (e.g., `claude-sonnet-4-6`)
+- [x] **SCOR-05**: `candidate_job_scores` records the `model_used` string (e.g., `openai/gpt-4o-mini`)
 
 ### Database Schema
 
@@ -76,7 +76,7 @@
 - [x] **INFR-02**: `worker.ts` bootstraps BullMQ worker with no HTTP layer
 - [x] **INFR-03**: Environment variables validated at startup via `@nestjs/config` + Zod — application fails fast on missing config
 - [x] **INFR-04**: Docker Compose defines: `api`, `worker`, `postgres` (16-alpine), `redis` (7-alpine) services
-- [x] **INFR-05**: `.env.example` documents all required environment variables: `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `POSTMARK_WEBHOOK_TOKEN`, `TENANT_ID`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NODE_ENV`
+- [x] **INFR-05**: `.env.example` documents all required environment variables: `DATABASE_URL`, `REDIS_URL`, `OPENROUTER_API_KEY`, `POSTMARK_WEBHOOK_TOKEN`, `TENANT_ID`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NODE_ENV`
 
 ## v2 Requirements
 
@@ -173,4 +173,4 @@
 ---
 
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-23 after Phase 8 gap closure*
+*Last updated: 2026-04-06 after Phase 17 completion — OpenRouter migration reflected*
