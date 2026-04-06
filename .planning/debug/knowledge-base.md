@@ -20,3 +20,11 @@ Resolved debug sessions. Used by `gsd-debugger` to surface known-pattern hypothe
 - **Files changed:** src/ingestion/ingestion.processor.ts (line 208, re-throw transaction error; comment update)
 ---
 
+## candidate-not-saved — PostgreSQL pg_trgm extension missing, blocking fuzzy duplicate detection
+- **Date:** 2026-04-06
+- **Error patterns:** extraction succeeds, no candidate saved, dedup check fails, similarity function, error 42883, function similarity does not exist
+- **Root cause:** PostgreSQL extension pg_trgm was not installed in the database. The dedupService.check() method uses the similarity() function from pg_trgm (in dedup.service.ts lines 44-51) for fuzzy name matching in duplicate detection. Without the extension, the raw SQL query fails with PostgreSQL error 42883 "function similarity(text, unknown) does not exist". Although dedupService.check() is wrapped in try-catch (lines 215-227 in ingestion.processor.ts), the underlying database error prevented the candidate from being saved. The Prisma migrations never included CREATE EXTENSION pg_trgm or the required gin indexes on candidates(full_name, phone).
+- **Fix:** Created Prisma migration 20260406153729_add_pg_trgm_extension with CREATE EXTENSION IF NOT EXISTS pg_trgm and GIN indexes on candidates(full_name) and candidates(phone) for fuzzy match performance. Migration is idempotent and safe to apply multiple times.
+- **Files changed:** prisma/migrations/20260406153729_add_pg_trgm_extension/migration.sql
+---
+
