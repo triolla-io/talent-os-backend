@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Milestone complete
-last_updated: "2026-04-01T05:14:23.902Z"
-last_activity: 2026-04-01
+last_updated: "2026-04-06T00:00:00.000Z"
+last_activity: 2026-04-06
 progress:
   total_phases: 14
   completed_phases: 12
@@ -22,16 +22,16 @@ progress:
 
 **Core Value:** Inbound CVs are automatically processed, de-duplicated, and scored against open jobs without any manual recruiter effort — end-to-end from email receipt to scored candidate record.
 
-**Current Focus:** Phase 17 — production-deployment-readiness-fix-tests-add-sanity-checks-and-prepare-ci-cd-for-hetzner-jenkins
+**Current Focus:** All phases complete — ready for Phase 2 planning (recruiter auth, admin UI, outbound communications)
 
-**Tech Stack (Locked):** TypeScript, NestJS 11, BullMQ + Redis, Prisma 7, PostgreSQL 16, Vercel AI SDK, Claude Haiku + Sonnet, Cloudflare R2, Postmark Inbound webhooks.
+**Tech Stack (Locked):** TypeScript, NestJS 11, BullMQ + Redis, Prisma 7, PostgreSQL 16, OpenRouter via @openrouter/sdk (openai/gpt-4o-mini), Cloudflare R2, Postmark Inbound webhooks.
 
 ## Current Position
 
 Phase: 17
 Plan: Not started
 
-**STATUS: Phase 16 context gathered (discuss mode). Ready for planning.**
+**STATUS: All 17 phases complete. v1.0 milestone done. 250 tests passing.**
 
 ## Accumulated Context
 
@@ -49,7 +49,7 @@ Plan: Not started
 - Full architecture spec approved 2026-03-19: `spec/backend-architecture-proposal.md`
 - Postmark inbound webhook auth method confirmed
 - pg_trgm performance validated at 500 CVs/month scale
-- Cost model: ~€5/month Hetzner + ~$6–16/month Anthropic
+- Cost model: ~€5/month Hetzner + ~$6–16/month OpenRouter (openai/gpt-4o-mini)
 
 ### Open Questions (Phase 2+)
 
@@ -104,6 +104,7 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 | 260330-idw | Add GET /jobs/:id endpoint to fetch single job with hiring_flow and screening_questions | 2026-03-30 | fcf3bae | [260330-idw-add-get-jobs-id-endpoint-to-fetch-single](./quick/260330-idw-add-get-jobs-id-endpoint-to-fetch-single/) |
 | 260401-c3k | Remove Jenkins, add GitHub Actions CI, strip nginx/certbot from docker-compose | 2026-04-01 | 212186d | [260401-c3k-remove-jenkins-add-github-actions-ci-upd](./quick/260401-c3k-remove-jenkins-add-github-actions-ci-upd/) |
 | 260401-ccr | Clean up Coolify migration leftovers: delete nginx.conf, deploy.sh, setup-ssl.sh; remove Makefile targets; fix CI node-version to 22 | 2026-04-01 | a0ca032 | [260401-ccr-clean-up-coolify-migration-leftovers-del](./quick/260401-ccr-clean-up-coolify-migration-leftovers-del/) |
+| 260406-85x | Clean up and update planning docs: fix tech stack refs (OpenRouter, Prisma 7), mark Phases 16–17 complete, sync REQUIREMENTS.md model names | 2026-04-06 | — | [260406-85x-clean-up-and-update-the-planning-directo](./quick/260406-85x-clean-up-and-update-the-planning-directo/) |
 
 ### Todos
 
@@ -111,17 +112,26 @@ None — ready to proceed to `/gsd:plan-phase 1`.
 
 ## Session Continuity
 
-**Last Session:** 2026-04-01T05:55:25Z
-Last activity: 2026-04-01 - Completed quick task 260401-ccr: Clean up Coolify migration leftovers (delete nginx.conf, deploy.sh, setup-ssl.sh; clean Makefile; fix CI node-version to 22)
+**Last Session:** 2026-04-06T00:00:00Z
+Last activity: 2026-04-06 - Completed quick task 260406-85x: Clean up and update planning docs to reflect Phases 12–17 completion and OpenRouter migration
 
-**What Happened (Phase 16 Context Gathering):**
+**Phase 16 & 17 Complete:**
 
-16. Phase 16 (Backend Support for Manual Routing & UI Parity) — Context gathered ✓
-    - Gray areas identified: Application handling on reassignment, stage reset policy, scope (API vs bulk), audit trail, endpoint design, validation
-    - User decisions: Keep old Application + rescore on reassignment, always reset stage, API only (no bulk), no audit trail, extend PATCH /candidates/:id, reject if no stages
-    - CONTEXT.md created with 19 locked decisions (D-01 to D-19)
-    - No corrections made — all assumptions validated
-    - Ready for planning
+16. Phase 16 (Backend Support for Manual Routing & UI Parity) — COMPLETE ✓
+    - PATCH /candidates/:id supports job reassignment (preserves old Application + scores, creates new Application, rescores)
+    - GET /candidates supports ?unassigned=true filter
+    - GET /jobs and GET /jobs/:id expose shortId field
+    - GET /candidates exposes sourceAgency field
+    - Features verified in codebase 2026-04-06 (implemented without plan-tracking)
+    - 250 tests passing
+
+17. Phase 17 (Production Deployment Readiness) — COMPLETE ✓
+    - GET /health endpoint (DB + Redis probes)
+    - nestjs-pino structured JSON logging
+    - Security: helmet, throttler, CORS deny-all
+    - GitHub Actions CI pipeline
+    - docker-compose resource limits and healthchecks
+    - README rewritten as developer onboarding docs
 
 **Previous Session (Phase 15):**
 
@@ -186,8 +196,41 @@ Last activity: 2026-04-01 - Completed quick task 260401-ccr: Clean up Coolify mi
    - Phase 10 (Job Creation): POST /jobs enhancement, default stage seeding, 145 tests
    - Phase 11 (API Protocol MVP): Full job management API, schema updates, 195 tests
 
+9. Phase 12 (Add Candidate from UI) — COMPLETE ✓
+   - POST /candidates endpoint with multipart form upload to R2
+   - Manual candidate creation flow (outside email pipeline)
+
+10. Phase 13 (Kanban Board Candidate Hiring Stage Tracking) — COMPLETE ✓
+    - Application stage transitions (new → screening → interview → offer → hired/rejected)
+    - Stage history tracking
+
+11. Phase 14 (OpenRouter Extraction Pipeline) — COMPLETE ✓
+    - Real LLM calls replacing mock extraction — @openrouter/sdk + openai/gpt-4o-mini
+    - Email → LLM → dedup → scoring → UI pipeline fully live
+    - Quick tasks: 260324-agv (OpenRouter MVP), 260324-c3g (cleanup), 260324-cbs (SDK swap)
+
+12. Phase 15 (Deterministic Job ID Routing) — COMPLETE ✓
+    - Regex + shortId lookup replacing semantic matching (Levenshtein/embedding)
+    - Removed JobTitleMatcherService semantic layer
+    - Quick task: 260329-ndq (deterministic routing wire-up)
+
+13. Phase 16 (Backend Support for Manual Routing & UI Parity) — COMPLETE ✓
+    - PATCH /candidates/:id supports job reassignment (preserves old Application + scores, creates new Application, rescores)
+    - GET /candidates supports ?unassigned=true filter
+    - GET /jobs and GET /jobs/:id expose shortId field
+    - GET /candidates exposes sourceAgency field
+    - 250 tests passing
+
+14. Phase 17 (Production Deployment Readiness) — COMPLETE ✓
+    - GET /health endpoint (DB + Redis probes)
+    - nestjs-pino structured JSON logging
+    - Security: helmet, throttler, CORS deny-all
+    - GitHub Actions CI pipeline (quick task 260401-c3k)
+    - docker-compose resource limits and healthchecks
+    - README rewritten as developer onboarding docs
+
 **Next Step:**
-All Phase 1 MVP work complete. Ready for:
+All 17 phases complete. v1.0 milestone done. Ready for:
 
 - Deployment to Hetzner VPS
 - Phase 2 planning (recruiter auth, admin UI, outbound communications)
