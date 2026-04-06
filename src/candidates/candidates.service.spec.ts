@@ -25,6 +25,7 @@ function mockCandidate(overrides: Partial<{
   jobId: string | null;
   hiringStageId: string | null;
   hiringStage: { name: string } | null;
+  aiScore: number | null;
   applications: { scores: { score: number }[] }[];
   duplicateFlags: { id: string }[];
   candidateStageSummaries: { jobStageId: string; summary: string }[];
@@ -46,6 +47,7 @@ function mockCandidate(overrides: Partial<{
     jobId: 'job-uuid',
     hiringStageId: 'stage-uuid',
     hiringStage: { name: 'Application Review' },
+    aiScore: null,
     applications: [],
     duplicateFlags: [],
     candidateStageSummaries: [],
@@ -88,11 +90,11 @@ describe('CandidatesService', () => {
     jest.clearAllMocks();
   });
 
-  // Test 1: no params → returns all candidates with ai_score computed from nested scores
+  // Test 1: no params → returns all candidates with ai_score from denormalized field
   it('returns all candidates scoped to tenantId with ai_score computed', async () => {
     prismaMock.candidate.findMany.mockResolvedValue([
       mockCandidate({
-        applications: [{ scores: [{ score: 80 }, { score: 65 }] }],
+        aiScore: 80, // C-5: aiScore is now denormalized from database field (not computed from applications)
         duplicateFlags: [],
       }),
     ]);
@@ -106,7 +108,7 @@ describe('CandidatesService', () => {
     );
     expect(result.candidates).toHaveLength(1);
     expect(result.total).toBe(1);
-    expect(result.candidates[0].ai_score).toBe(80); // MAX of [80, 65]
+    expect(result.candidates[0].ai_score).toBe(80);
     expect(result.candidates[0].full_name).toBe('John Doe');
     expect(result.candidates[0].is_duplicate).toBe(false);
   });
@@ -131,50 +133,29 @@ describe('CandidatesService', () => {
     );
   });
 
-  // Test 3: filter='high-score' → only candidates with ai_score >= 70
-  it('filter=high-score returns only candidates with ai_score >= 70', async () => {
-    prismaMock.candidate.findMany.mockResolvedValue([
-      mockCandidate({ id: 'cand-1', applications: [{ scores: [{ score: 85 }] }] }),
-      mockCandidate({ id: 'cand-2', applications: [{ scores: [{ score: 50 }] }] }),
-      mockCandidate({ id: 'cand-3', applications: [] }), // no scores → null
-    ]);
-
-    const result = await service.findAll(undefined, 'high-score');
-
-    expect(result.candidates).toHaveLength(1);
-    expect(result.candidates[0].id).toBe('cand-1');
-    expect(result.candidates[0].ai_score).toBe(85);
-    expect(result.total).toBe(1);
-  });
-
-  // Test 4: filter='available' → WHERE applications.none in hired/rejected
-  it('filter=available adds applications.none condition to where clause', async () => {
-    prismaMock.candidate.findMany.mockResolvedValue([]);
-
-    await service.findAll(undefined, 'available');
-
-    expect(prismaMock.candidate.findMany).toHaveBeenCalledWith(
+  // Test 3: filter='high-score' is no longer supported → throws BadRequestException
+  it('filter=high-score throws INVALID_FILTER error', async () => {
+    await expect(service.findAll(undefined, 'high-score' as any)).rejects.toThrow(
       expect.objectContaining({
-        where: expect.objectContaining({
-          tenantId: TENANT_ID,
-          applications: { none: { stage: { in: ['hired', 'rejected'] } } },
-        }),
+        getResponse: expect.any(Function),
       }),
     );
   });
 
-  // Test 5: filter='referred' → WHERE source='referral'
-  it('filter=referred adds source=referral condition to where clause', async () => {
-    prismaMock.candidate.findMany.mockResolvedValue([]);
-
-    await service.findAll(undefined, 'referred');
-
-    expect(prismaMock.candidate.findMany).toHaveBeenCalledWith(
+  // Test 4: filter='available' is no longer supported → throws BadRequestException
+  it('filter=available throws INVALID_FILTER error', async () => {
+    await expect(service.findAll(undefined, 'available' as any)).rejects.toThrow(
       expect.objectContaining({
-        where: expect.objectContaining({
-          tenantId: TENANT_ID,
-          source: 'referral',
-        }),
+        getResponse: expect.any(Function),
+      }),
+    );
+  });
+
+  // Test 5: filter='referred' is no longer supported → throws BadRequestException
+  it('filter=referred throws INVALID_FILTER error', async () => {
+    await expect(service.findAll(undefined, 'referred' as any)).rejects.toThrow(
+      expect.objectContaining({
+        getResponse: expect.any(Function),
       }),
     );
   });
@@ -841,14 +822,12 @@ describe('CandidatesService - Response Format Compliance', () => {
     expect(result.candidates[0]).not.toHaveProperty('applications');
   });
 
-  it('calculates ai_score as Math.max of application scores', async () => {
+  it('returns ai_score from denormalized field', async () => {
     mockPrisma.candidate.findMany.mockResolvedValue([
       {
         id: 'cand-1',
-        applications: [
-          { scores: [{ score: 50 }] },
-          { scores: [{ score: 80 }] },
-        ],
+        aiScore: 80, // C-5: aiScore is now denormalized (was computed from applications)
+        applications: [],
         duplicateFlags: [],
         candidateStageSummaries: [],
       },

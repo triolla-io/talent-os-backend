@@ -22,9 +22,6 @@ Fetch candidates with optional search and filtering.
 - `q` (optional): Search query matching name, role, or email (case-insensitive substring match)
 - `filter` (optional): Filter type
   - `all` — all candidates (default)
-  - `high-score` — candidates with AI score ≥ 70
-  - `available` — candidates with no hired/rejected applications
-  - `referred` — candidates sourced from referral
   - `duplicates` — candidates with unreviewed duplicate flags
 - `job_id` (optional): Filter candidates by job UUID (used for Kanban view)
 - `unassigned` (optional): `'true'` — filters candidates not yet assigned to any job

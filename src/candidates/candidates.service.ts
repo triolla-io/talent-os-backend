@@ -63,6 +63,17 @@ export class CandidatesService {
   ): Promise<{ candidates: CandidateResponse[]; total: number }> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
 
+    // Validate filter parameter — only 'all' and 'duplicates' are supported
+    // (C-4 fix: prevents silent failures from removed filters like 'high-score', 'available', 'referred')
+    if (filter && !['all', 'duplicates'].includes(filter)) {
+      throw new BadRequestException({
+        error: {
+          code: 'INVALID_FILTER',
+          message: `Filter '${filter}' is not supported. Use 'all' or 'duplicates'.`,
+        },
+      });
+    }
+
     // Build WHERE conditions
     const where: Prisma.CandidateWhereInput = { tenantId };
 

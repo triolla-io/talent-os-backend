@@ -360,6 +360,9 @@ export class IngestionProcessor extends WorkerHost {
 
     // Phase 7: Score candidate against ALL matched jobs (SCOR-01, D-11)
     // Loop over each matched job and create application + score record
+    // Track MAX score across all jobs for denormalized aiScore field
+    let maxAiScore = -1;
+
     for (const activeJob of matchedJobs) {
       // SCOR-02: upsert application row first — idempotent on retry
       const application = await this.prisma.application.upsert({
@@ -416,15 +419,22 @@ export class IngestionProcessor extends WorkerHost {
         },
       });
 
-      // Update denormalized aiScore on candidate
-      await this.prisma.candidate.update({
-        where: { id: context.candidateId },
-        data: { aiScore: scoreResult.score },
-      });
+      // Track maximum score across all jobs for denormalized aiScore
+      // (C-5 fix: prevents race condition from repeated updates in loop)
+      maxAiScore = Math.max(maxAiScore, scoreResult.score);
 
       this.logger.log(
         `Phase 7 scored candidateId: ${context.candidateId} against jobId: ${activeJob.id} — score: ${scoreResult.score}`,
       );
+    }
+
+    // Update denormalized aiScore once after all jobs scored
+    // Only set if we actually scored any jobs (maxAiScore > -1)
+    if (maxAiScore > -1) {
+      await this.prisma.candidate.update({
+        where: { id: context.candidateId },
+        data: { aiScore: maxAiScore },
+      });
     }
 
     // D-16: terminal status — set AFTER all Phase 7 work completes (only reached if no error thrown)
