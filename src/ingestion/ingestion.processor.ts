@@ -211,7 +211,20 @@ export class IngestionProcessor extends WorkerHost {
 
     // Phase 6: Duplicate detection + minimal candidate shell INSERT/UPSERT (atomic)
     // dedupService.check() runs OUTSIDE the transaction — read-only query, no benefit from holding lock
-    const dedupResult: DedupResult | null = await this.dedupService.check(extraction!, tenantId);
+    let dedupResult: DedupResult | null = null;
+    try {
+      dedupResult = await this.dedupService.check(extraction!, tenantId);
+    } catch (err) {
+      this.logger.error(
+        `Dedup check failed for MessageID: ${payload.MessageID} — ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      await this.prisma.emailIntakeLog.update({
+        where: { idx_intake_message_id: { tenantId, messageId: payload.MessageID } },
+        data: { processingStatus: 'failed', errorMessage: (err as Error).message },
+      });
+      throw err; // Re-throw for BullMQ to retry
+    }
 
     let candidateId!: string;
 
