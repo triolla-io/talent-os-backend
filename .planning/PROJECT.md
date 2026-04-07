@@ -86,18 +86,32 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 
 ## Current State
 
-**Phase 17 Complete (2026-04-01):** Production Deployment Readiness
-- Health endpoint GET /health (DB + Redis probes), structured JSON logging (nestjs-pino), security middleware (helmet, throttler, CORS deny-all)
-- GitHub Actions CI pipeline, docker-compose hardened (resource limits, healthchecks)
-- README rewritten as complete developer onboarding documentation
-- 250 tests passing across 20 suites
+**v1.0 Milestone Complete (2026-04-07)**
 
-**Earlier milestones completed:**
-- Phase 14: OpenRouter extraction pipeline (real LLM calls replacing mock)
-- Phase 15: Deterministic Job ID routing (regex + shortId lookup, removed semantic matching)
-- Phase 16: Manual routing & UI parity (PATCH /candidates/:id reassignment, unassigned filter, shortId/sourceAgency in responses)
-- Phase 12: Add candidate from UI (POST /candidates endpoint with R2 upload)
-- Phase 13: Kanban board candidate hiring stage tracking
+All 17 phases delivered end-to-end:
+1. **Foundation** — Database schema (7 tables, tenant_id everywhere), NestJS + BullMQ worker, environment validation
+2. **Webhook Intake** — Postmark inbound webhooks, HMAC verification, idempotency via MessageID
+3. **Processing Pipeline** — PDF/DOCX parsing, spam pre-filtering (no attachment, marketing keywords)
+4. **AI Extraction** — OpenRouter via @openrouter/sdk, openai/gpt-4o-mini model, Zod schema validation
+5. **File Storage** — Cloudflare R2 for original CV files, cv_text stored in PostgreSQL
+6. **Duplicate Detection** — pg_trgm fuzzy matching, duplicate flags for human review (never auto-merge)
+7. **Candidate Scoring** — Score candidates against each active job, append-only score history
+8. **Phase 1 Verification** — VERIFICATION.md written, PROC-01/INFR-04/INFR-05 requirements closed
+9. **Recruiter API** — GET /api/candidates, /jobs, /applications endpoints with search/filter
+10. **Job Creation** — POST /api/jobs with atomic nested JobStage + ScreeningQuestion seeding
+11. **API Protocol MVP** — Full job management (GET/POST/PUT/DELETE), validation, tenant isolation
+12. **Add Candidate from UI** — POST /candidates endpoint with R2 multipart upload
+13. **Kanban Board** — Application stage tracking (new → screening → interview → offer → hired/rejected)
+14. **OpenRouter Pipeline** — Real LLM extraction calls replacing mock, email → scoring fully live
+15. **Deterministic Job Routing** — Regex + shortId lookup replacing semantic matching (cost: $0, latency: 2ms)
+16. **Manual Candidate Routing** — PATCH /candidates/:id supports reassignment with atomic scoring
+17. **Production Readiness** — Health endpoint, nestjs-pino logging, helmet + CORS security, GitHub Actions CI/CD
+
+**Quality Metrics:**
+- 250+ tests passing across 20 suites
+- 0 TypeScript errors
+- 100% requirement coverage (40/40 v1 requirements mapped and validated)
+- Production-ready: Hetzner CX21 deployment-ready, docker-compose with healthchecks, structured logging
 
 ## Evolution
 

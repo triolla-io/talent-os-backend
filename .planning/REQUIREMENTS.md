@@ -1,176 +1,19 @@
-# Requirements: Triolla Talent OS — Backend
+# Requirements: Triolla Talent OS — Backend (v2.0)
 
-**Defined:** 2026-03-22
-**Core Value:** Inbound CVs are automatically processed, de-duplicated, and scored against open jobs without any manual recruiter effort — end-to-end from email receipt to scored candidate record.
+**Defined:** 2026-04-07
+**Core Value:** Recruiter-facing authentication, admin UI for candidate management, and outbound candidate communications.
 
-## v1 Requirements
+## v2 Requirements (Planning Phase)
 
-### Webhook Intake
+This document will be populated during the v2.0 milestone planning phase via `/gsd:new-milestone`.
 
-- [x] **WBHK-01**: System receives Postmark inbound webhook POST at `POST /webhooks/email` and responds within 100ms
-- [x] **WBHK-02**: System verifies Postmark webhook signature (HMAC-SHA256) and returns 401 if invalid — prevents unauthorized record injection
-- [x] **WBHK-03**: System checks `MessageID` against `email_intake_log` before enqueuing — duplicate webhook deliveries are silently skipped
-- [x] **WBHK-04**: System inserts `email_intake_log` row (status: `pending`) before enqueuing — this row is the idempotency guard
-- [x] **WBHK-05**: System enqueues job to BullMQ `ingest-email` queue with 3 retry attempts and exponential backoff on success
-- [x] **WBHK-06**: Raw Postmark payload stored in `email_intake_log.raw_payload` with attachment binary blobs stripped
+### Planned Focus Areas
 
-### Processing Pipeline
-
-- [x] **PROC-01**: API and Worker run as separate Docker containers — CPU-heavy processing cannot block webhook receipt
-- [x] **PROC-02**: Spam pre-filter discards emails with no attachment AND body < 100 chars before any LLM call
-- [x] **PROC-03**: Spam pre-filter discards emails with marketing keywords in subject (`unsubscribe`, `newsletter`, `promotion`, `deal`, `offer`) before any LLM call
-- [x] **PROC-04**: System extracts plain text from PDF attachments via `pdf-parse`
-- [x] **PROC-05**: System extracts plain text from DOCX attachments via `mammoth`
-- [x] **PROC-06**: System marks `email_intake_log` as `spam` and stops processing when spam filter rejects email
-
-### AI Extraction
-
-- [x] **AIEX-01**: Agent 1 (openai/gpt-4o-mini via OpenRouter) extracts structured candidate fields from email + CV text using @openrouter/sdk with JSON mode + Zod schema
-- [x] **AIEX-02**: Extracted schema includes: `fullName`, `email`, `phone`, `currentRole`, `yearsExperience`, `skills[]`, `summary` (2-sentence AI summary), `source` enum
-- [x] **AIEX-03**: All extracted fields are nullable (except `fullName`) — agent never throws on missing fields
-
-### File Storage
-
-- [x] **STOR-01**: Original CV file (PDF/DOCX) is uploaded to Cloudflare R2 at path `cvs/{tenantId}/{messageId}` before duplicate detection
-- [x] **STOR-02**: R2 file URL is stored in `candidates.cv_file_url` — Postmark does not retain attachments after delivery
-- [x] **STOR-03**: Full extracted CV text is stored in `candidates.cv_text` (PostgreSQL)
-
-### Duplicate Detection
-
-- [x] **DEDUP-01**: Dedup runs entirely in PostgreSQL via `pg_trgm` extension — no candidates loaded into application memory
-- [x] **DEDUP-02**: Exact email match (`confidence = 1.0`) → UPSERT existing candidate record
-- [x] **DEDUP-03**: Fuzzy name match (`similarity > 0.7`, `confidence < 1.0`) → INSERT new candidate + create `duplicate_flags` row for human review
-- [x] **DEDUP-04**: No match → INSERT new candidate record
-- [x] **DEDUP-05**: System never auto-merges on fuzzy match — creates `duplicate_flags` with `reviewed = false`
-- [x] **DEDUP-06**: `pg_trgm` GIN indexes on `candidates.full_name` and `candidates.phone` are created in migration
-
-### Candidate Storage
-
-- [x] **CAND-01**: `candidates` table stores AI-extracted fields plus `cv_text`, `cv_file_url`, `source`, `source_email`, `source_agency`, `metadata` JSONB
-- [x] **CAND-02**: `candidates` table has UNIQUE index on `(tenant_id, email) WHERE email IS NOT NULL`
-- [x] **CAND-03**: `email_intake_log.candidate_id` is set after successful candidate creation
-
-### AI Scoring
-
-- [x] **SCOR-01**: Scoring processor fetches all active jobs for the tenant from `jobs` table (`WHERE status = 'active'`)
-- [x] **SCOR-02**: Scoring processor upserts an `applications` row (`stage = 'new'`) for each candidate-job pair before scoring — idempotent on retry
-- [x] **SCOR-03**: Agent 2 (openai/gpt-4o-mini via OpenRouter) scores candidate against each active job and returns: `score` (0–100), `reasoning`, `strengths[]`, `gaps[]`
-- [x] **SCOR-04**: Score result is inserted append-only into `candidate_job_scores` — existing scores are never updated
-- [x] **SCOR-05**: `candidate_job_scores` records the `model_used` string (e.g., `openai/gpt-4o-mini`)
-
-### Database Schema
-
-- [x] **DB-01**: 7 tables created via Prisma migration: `tenants`, `jobs`, `candidates`, `applications`, `candidate_job_scores`, `duplicate_flags`, `email_intake_log`
-- [x] **DB-02**: Every table carries `tenant_id` FK → `tenants.id` from day 1 — no schema rewrite required for multi-tenancy
-- [x] **DB-03**: Status/type columns use `text` + CHECK constraints (not PostgreSQL ENUMs) — adding values requires no migration
-- [x] **DB-04**: `updated_at` maintained by Prisma `@updatedAt` directive, not DB triggers
-- [x] **DB-05**: No binary blobs stored in database — original files go to R2, only URL stored
-- [x] **DB-06**: `applications` has UNIQUE constraint `(tenant_id, candidate_id, job_id)`
-- [x] **DB-07**: `duplicate_flags` has UNIQUE constraint `(tenant_id, candidate_id, matched_candidate_id)` — prevents duplicate flags on worker retries
-- [x] **DB-08**: `email_intake_log` has UNIQUE constraint `(tenant_id, message_id)` — primary idempotency guard
-- [x] **DB-09**: All required indexes created in migration (active jobs, application stage, score lookup, unreviewed duplicates, intake status)
-
-### Infrastructure
-
-- [x] **INFR-01**: `main.ts` bootstraps NestJS with `rawBody: true` for HMAC signature verification
-- [x] **INFR-02**: `worker.ts` bootstraps BullMQ worker with no HTTP layer
-- [x] **INFR-03**: Environment variables validated at startup via `@nestjs/config` + Zod — application fails fast on missing config
-- [x] **INFR-04**: Docker Compose defines: `api`, `worker`, `postgres` (16-alpine), `redis` (7-alpine) services
-- [x] **INFR-05**: `.env.example` documents all required environment variables: `DATABASE_URL`, `REDIS_URL`, `OPENROUTER_API_KEY`, `POSTMARK_WEBHOOK_TOKEN`, `TENANT_ID`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NODE_ENV`
-
-## v2 Requirements
-
-### Recruiter API
-
-- **RAPI-01**: REST API endpoints for reading candidates, applications, scores
-- **RAPI-02**: Authentication (JWT / Clerk)
-- **RAPI-03**: Application stage transition endpoints (screening → interview → offer → hired/rejected)
-- **RAPI-04**: Duplicate flag review endpoint (mark as reviewed, merge decision)
-
-### Recruiter UI Integration
-
-- **UI-01**: UI consumes recruiter API to display candidate pipeline
-- **UI-02**: Duplicate flag review UI for recruiter decisions
-
-### Outreach
-
-- **OUTR-01**: Outbound email agent for candidate outreach
-- **OUTR-02**: Voice screening agent
-
-### Operations
-
-- **OPS-01**: Sentry error tracking integration
-- **OPS-02**: BullMQ dashboard for queue health monitoring
-- **OPS-03**: Multi-tenant registration flow
-
-## Out of Scope
-
-| Feature | Reason |
-|---------|--------|
-| Local LLMs (Ollama) | Only when monthly LLM cost > ~$100/month — currently ~$6–16 |
-| Vector DB for dedup | pg_trgm sufficient at this scale, zero extra infra |
-| Real-time events (WebSockets) | Phase 1 is purely reactive — no UI in Phase 1 |
-| Fine-tuning / RAG | Future — not needed at 500 CVs/month |
-| Multi-tenant registration | Phase 2 — one hardcoded tenant in Phase 1 |
-| Gmail API polling | Postmark covers Phase 1; Gmail is a fallback only if client insists |
-
-## Traceability
-
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| WBHK-01 | Phase 2 | Complete |
-| WBHK-02 | Phase 2 | Complete |
-| WBHK-03 | Phase 2 | Complete |
-| WBHK-04 | Phase 2 | Complete |
-| WBHK-05 | Phase 2 | Complete |
-| WBHK-06 | Phase 2 | Complete |
-| PROC-01 | Phase 8 | Complete |
-| PROC-02 | Phase 3 | Complete |
-| PROC-03 | Phase 3 | Complete |
-| PROC-04 | Phase 3 | Complete |
-| PROC-05 | Phase 3 | Complete |
-| PROC-06 | Phase 3 | Complete |
-| AIEX-01 | Phase 4 | Complete |
-| AIEX-02 | Phase 4 | Complete |
-| AIEX-03 | Phase 4 | Complete |
-| STOR-01 | Phase 5 | Complete |
-| STOR-02 | Phase 5 | Complete |
-| STOR-03 | Phase 5 | Complete |
-| DEDUP-01 | Phase 6 | Complete |
-| DEDUP-02 | Phase 6 | Complete |
-| DEDUP-03 | Phase 6 | Complete |
-| DEDUP-04 | Phase 6 | Complete |
-| DEDUP-05 | Phase 6 | Complete |
-| DEDUP-06 | Phase 6 | Complete |
-| CAND-01 | Phase 7 | Complete |
-| CAND-02 | Phase 7 | Complete |
-| CAND-03 | Phase 7 | Complete |
-| SCOR-01 | Phase 7 | Complete |
-| SCOR-02 | Phase 7 | Complete |
-| SCOR-03 | Phase 7 | Complete |
-| SCOR-04 | Phase 7 | Complete |
-| SCOR-05 | Phase 7 | Complete |
-| DB-01 | Phase 1 | Complete |
-| DB-02 | Phase 1 | Complete |
-| DB-03 | Phase 1 | Complete |
-| DB-04 | Phase 1 | Complete |
-| DB-05 | Phase 1 | Complete |
-| DB-06 | Phase 1 | Complete |
-| DB-07 | Phase 1 | Complete |
-| DB-08 | Phase 1 | Complete |
-| DB-09 | Phase 1 | Complete |
-| INFR-01 | Phase 1 | Complete |
-| INFR-02 | Phase 1 | Complete |
-| INFR-03 | Phase 1 | Complete |
-| INFR-04 | Phase 8 | Complete |
-| INFR-05 | Phase 8 | Complete |
-
-**Coverage:**
-- v1 requirements: 40 total
-- Mapped to phases: 40
-- Unmapped: 0 ✓
+- **Recruiter Authentication:** JWT or Clerk integration for role-based access control
+- **Admin UI:** Candidate pipeline dashboard, duplicate flag review, job management
+- **Outbound Communications:** Email templates, candidate outreach automation
+- **Multi-tenant Registration:** Full tenant onboarding flow (v1.0 had hardcoded single tenant)
 
 ---
 
-*Requirements defined: 2026-03-22*
-*Last updated: 2026-04-06 after Phase 17 completion — OpenRouter migration reflected*
+*Requirements for v2.0 to be defined during: `/gsd:new-milestone`*
