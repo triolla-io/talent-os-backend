@@ -257,18 +257,23 @@ export class IngestionProcessor extends WorkerHost {
             tx,
           );
         } else if (dedupResult.confidence === 1.0) {
-          // Exact phone match (DEDUP-02): UPSERT existing candidate — update fullName + phone only
-          // source and sourceEmail are NEVER updated — first-submission ROI attribution (D-07)
-          await this.dedupService.upsertCandidate(dedupResult.match!.id, extraction!, tx);
-          candidateId = dedupResult.match!.id; // Use existing candidate ID (D-11)
-
-          // Record duplicate flag for HR review (per 260407-iff)
-          await this.dedupService.createFlag(
-            dedupResult.match!.id, // matched candidate = candidateId for the flag
-            null,                   // self-reference: matched_candidate_id = candidate_id (no new candidate created)
-            dedupResult.confidence, // 1.0 for exact match
+          // Exact phone match — insert a NEW candidate row so both submissions appear in the UI
+          // The existing candidate is untouched (first-submission attribution preserved, D-07)
+          candidateId = await this.dedupService.insertCandidate(
+            extraction!,
             tenantId,
-            dedupResult.fields,     // ['phone']
+            payload.From,
+            tx,
+            extraction!.source_hint,
+          );
+
+          // Link new row → existing row so HR can see both are the same person
+          await this.dedupService.createFlag(
+            candidateId,             // new candidate (incoming submission)
+            dedupResult.match!.id,  // existing candidate (first submission)
+            dedupResult.confidence,  // 1.0 — exact phone match
+            tenantId,
+            dedupResult.fields,      // ['phone']
             tx,
           );
         }
