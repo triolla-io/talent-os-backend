@@ -230,31 +230,37 @@ export class IngestionProcessor extends WorkerHost {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        if (dedupResult && dedupResult.confidence === 1.0) {
-          // Exact email match (DEDUP-02): UPSERT existing candidate — update fullName + phone only
+        if (dedupResult === null) {
+          // No phone match — new candidate, proceed normally
+          candidateId = await this.dedupService.insertCandidate(
+            extraction!,
+            tenantId,
+            payload.From,
+            tx,
+            extraction!.source_hint,
+          );
+        } else if (dedupResult.fields.includes('phone_missing')) {
+          // Phone not extracted from CV — insert as new candidate + flag for HR review
+          candidateId = await this.dedupService.insertCandidate(
+            extraction!,
+            tenantId,
+            payload.From,
+            tx,
+            extraction!.source_hint,
+          );
+          await this.dedupService.createFlag(
+            candidateId,
+            null,              // no match target — self-referencing flag
+            0,                 // confidence 0 — not a real duplicate signal
+            tenantId,
+            ['phone_missing'],
+            tx,
+          );
+        } else if (dedupResult.confidence === 1.0) {
+          // Exact phone match (DEDUP-02): UPSERT existing candidate — update fullName + phone only
           // source and sourceEmail are NEVER updated — first-submission ROI attribution (D-07)
-          await this.dedupService.upsertCandidate(dedupResult.match.id, extraction!, tx);
-          candidateId = dedupResult.match.id; // Use existing candidate ID (D-11)
-        } else if (dedupResult && dedupResult.confidence < 1.0) {
-          // Fuzzy name match (DEDUP-03): INSERT new candidate shell + create duplicate_flags for human review
-          // Never auto-merge — DEDUP-05, D-12
-          candidateId = await this.dedupService.insertCandidate(
-            extraction!,
-            tenantId,
-            payload.From,
-            tx,
-            extraction!.source_hint,
-          );
-          await this.dedupService.createFlag(candidateId, dedupResult.match.id, dedupResult.confidence, tenantId, tx);
-        } else {
-          // No match (DEDUP-04): INSERT new candidate shell
-          candidateId = await this.dedupService.insertCandidate(
-            extraction!,
-            tenantId,
-            payload.From,
-            tx,
-            extraction!.source_hint,
-          );
+          await this.dedupService.upsertCandidate(dedupResult.match!.id, extraction!, tx);
+          candidateId = dedupResult.match!.id; // Use existing candidate ID (D-11)
         }
 
         // D-10: Set email_intake_log.candidate_id atomically — if this fails, candidate INSERT rolls back too

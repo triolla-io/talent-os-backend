@@ -446,24 +446,25 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
-  // 6-02-03: fuzzy match → INSERT new candidate + createFlag + email_intake_log.candidate_id = new ID
-  it('6-02-03: fuzzy match — new candidate inserted, flag created, candidateId set on intake log', async () => {
+  // 6-02-03: phone_missing sentinel → INSERT new candidate + phone_missing flag created
+  it('6-02-03: phone_missing — new candidate inserted, phone_missing flag created, candidateId set on intake log', async () => {
     dedupService.check.mockResolvedValue({
-      match: { id: 'matched-cand-id' },
-      confidence: 0.85,
-      fields: ['name'],
+      match: null,
+      confidence: 0,
+      fields: ['phone_missing'],
     });
-    dedupService.insertCandidate.mockResolvedValue('fuzzy-new-candidate-id');
+    dedupService.insertCandidate.mockResolvedValue('phone-missing-candidate-id');
 
     const job = { id: 'test-dedup-3', data: validJobPayload() } as any;
     await processor.process(job);
 
     expect(dedupService.insertCandidate).toHaveBeenCalledTimes(1);
     expect(dedupService.createFlag).toHaveBeenCalledWith(
-      'fuzzy-new-candidate-id',
-      'matched-cand-id',
-      0.85,
+      'phone-missing-candidate-id',
+      null,
+      0,
       'test-tenant-id',
+      ['phone_missing'],
       expect.anything(),
     );
     expect(dedupService.upsertCandidate).not.toHaveBeenCalled();

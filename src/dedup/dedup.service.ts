@@ -3,14 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CandidateExtract } from '../ingestion/services/extraction-agent.service';
 
-export interface FuzzyMatch {
-  id: string;
-  full_name: string;
-  name_sim: number;
-}
-
 export interface DedupResult {
-  match: { id: string };
+  match: { id: string } | null;
   confidence: number;
   fields: string[];
 }
@@ -23,45 +17,25 @@ export class DedupService {
     candidate: CandidateExtract,
     tenantId: string,
   ): Promise<DedupResult | null> {
-    // Step 1: Exact email match — skip if email is null (NULL = NULL is always false in SQL)
-    if (candidate.email) {
-      const exact = await this.prisma.candidate.findFirst({
-        where: { tenantId, email: candidate.email },
-        select: { id: true },
-      });
-      if (exact) {
-        return { match: { id: exact.id }, confidence: 1.0, fields: ['email'] };
-      }
+    // Step 1: No phone — return sentinel so processor can create phone_missing flag for HR review
+    if (!candidate.phone || candidate.phone.trim() === '') {
+      return { match: null, confidence: 0, fields: ['phone_missing'] };
     }
 
-    // Step 2: Fuzzy name match via pg_trgm — runs entirely in PostgreSQL (DEDUP-01)
-    // Compute reversed token order to catch "Smith John" matching stored "John Smith" (DEDUP-06)
-    const reversedName = candidate.full_name.trim().split(/\s+/).reverse().join(' ');
-
-    const fuzzy = await this.prisma.$queryRaw<FuzzyMatch[]>`
-      SELECT id::text, full_name,
-             GREATEST(
-               similarity(full_name, ${candidate.full_name}),
-               similarity(full_name, ${reversedName})
-             ) AS name_sim
+    // Step 2: Exact phone match — strip non-digit characters from both sides before comparing
+    const phoneMatches = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id::text
       FROM candidates
       WHERE tenant_id = ${tenantId}::uuid
-        AND (
-          similarity(full_name, ${candidate.full_name}) > 0.7
-          OR similarity(full_name, ${reversedName}) > 0.7
-        )
-      ORDER BY name_sim DESC
+        AND regexp_replace(phone, '[^0-9]', '', 'g') = regexp_replace(${candidate.phone}, '[^0-9]', '', 'g')
       LIMIT 1
     `;
 
-    if (fuzzy.length > 0) {
-      return {
-        match: { id: fuzzy[0].id },
-        confidence: fuzzy[0].name_sim,
-        fields: ['name'],
-      };
+    if (phoneMatches.length > 0) {
+      return { match: { id: phoneMatches[0].id }, confidence: 1.0, fields: ['phone'] };
     }
 
+    // Step 3: No match — new candidate
     return null;
   }
 
@@ -106,22 +80,25 @@ export class DedupService {
 
   async createFlag(
     candidateId: string,
-    matchedCandidateId: string,
+    matchedCandidateId: string | null,
     confidence: number,
     tenantId: string,
+    fields: string[],
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
+    // When matchedCandidateId is null (phone_missing case), self-reference satisfies FK constraint
+    const resolvedMatchId = matchedCandidateId ?? candidateId;
     const client = tx ?? this.prisma;
     await client.duplicateFlag.upsert({
       where: {
-        idx_duplicates_pair: { tenantId, candidateId, matchedCandidateId },
+        idx_duplicates_pair: { tenantId, candidateId, matchedCandidateId: resolvedMatchId },
       },
       create: {
         tenantId,
         candidateId,
-        matchedCandidateId,
+        matchedCandidateId: resolvedMatchId,
         confidence: new Prisma.Decimal(confidence.toString()),
-        matchFields: ['name'],
+        matchFields: fields,
         reviewed: false,
       },
       update: {}, // No-op on BullMQ retry — idempotent (D-13)
