@@ -90,9 +90,11 @@ Inbound CVs are automatically processed, de-duplicated, and scored against open 
 
 All 17 phases delivered end-to-end (email intake pipeline, OpenRouter extraction, pg_trgm dedup, recruiter API, production deployment).
 
-**v2.0 Milestone Planning Started (2026-04-07)**
+**v2.0 Milestone In Progress (2026-04-09)**
 
 Focus: Organization signup, admin user management, role-based access control. 5 phases planned in agile structure (Phase 18–22); no strict order required but Phase 18 is prerequisite.
+
+Phase 18 complete — Organization/User/Invitation schema + JWT infrastructure (jose, async HS256). DB table `tenants` preserved (@@map), all v1.0 data intact. JwtService with sign/verify exported via AuthModule. JWT_SECRET validated at startup (Zod .min(32)).
 
 ### v1.0 Deliverables
 1. **Foundation** — Database schema (7 tables, tenant_id everywhere), NestJS + BullMQ worker, environment validation
