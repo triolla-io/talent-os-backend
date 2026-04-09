@@ -1,240 +1,207 @@
 # Phase 18: Database Schema & JWT Infrastructure — Context
 
-**Gathered:** 2026-04-07
-**Status:** Ready for research and planning
+**Gathered:** 2026-04-09
+**Status:** Ready for planning — updated to align with spec/auth-rules.md
 
 ---
 
+<domain>
 ## Phase Boundary
 
-Add `organizations`, `users`, `roles`, and `invites` tables to PostgreSQL schema to support multi-tenant organization signup, admin user management, and role-based access control in v2.0. Implement JWT token generation/validation infrastructure (JwtService scaffold with sign() and verify() methods). **No API endpoints in this phase — database schema and service infrastructure only.**
+Add `organizations`, `users`, and `invitations` tables to PostgreSQL schema to support multi-tenant organization signup, team member invitations, and role-based access control in v2.0. Implement JWT token generation/validation infrastructure (JwtService scaffold with sign() and verify() methods). **No API endpoints in this phase — database schema and service infrastructure only.**
 
 This phase is a **prerequisite for Phase 19–22** (signup flow, admin endpoints, auth middleware, login).
+</domain>
 
----
-
+<decisions>
 ## Implementation Decisions
 
 ### 1. Table Structure: Rename tenants → organizations
 
 - **D-01:** Rename `tenants` table to `organizations` in Prisma schema and database migration.
-- **D-02:** Keep all `tenant_id` field names throughout the schema for backward compatibility (e.g., `candidates.tenant_id` still references `organizations.id`).
+- **D-02:** Keep all `tenant_id` field names throughout the existing v1.0 schema for backward compatibility (e.g., `candidates.tenant_id` still references `organizations.id`).
 - **D-03:** `organizations` table structure:
   - `id` (UUID primary key)
   - `name` (text, required — org display name)
   - `shortId` (varchar, unique per database — slug-like identifier for email subject routing, e.g., "triol-01")
-  - `created_by_user_id` (FK to users.id, nullable initially — admin user created after org)
+  - `created_by_user_id` (FK to users.id, nullable initially — populated after first user created)
   - `created_at`, `updated_at` (timestamps with timezone)
-  - `is_active` (boolean, default true — soft-delete flag for orgs, not used in Phase 18 but reserved)
+  - `is_active` (boolean, default true — soft-delete flag, reserved for future use)
 
 ### 2. Users Table Schema
 
 - **D-04:** Create `users` table with:
   - `id` (UUID primary key)
   - `email` (text, required)
-  - `password_hash` (text, required — bcrypt hash, but marked for deprecation with note: "Will be replaced by Google OAuth / Magic Link in future phase")
+  - `auth_provider` (text, required — CHECK constraint: `'google'` | `'magic_link'`) — owners/admins sign up via Google; invited users authenticate via Magic Link per AUTH-001 and AUTH-005
   - `organization_id` (FK to organizations.id, required)
-  - `role` (text CHECK constraint: 'admin' | 'recruiter' | 'viewer')
+  - `role` (text, required — CHECK constraint: `'owner'` | `'admin'` | `'member'` | `'viewer'`) — per AUTH-006
   - `full_name` (text, nullable)
-  - `is_active` (boolean, default true — soft delete for team members)
+  - `is_active` (boolean, default true — soft delete for team members per AUTH-007)
   - `created_at`, `updated_at` (timestamps with timezone)
 
 - **D-05:** Unique constraint: `(organization_id, email)` — prevents duplicate user emails per organization (allows same email across different orgs).
 
 - **D-06:** No UNIQUE constraint on email globally — same person can sign up for multiple orgs.
 
-### 3. Password Management (Temporary)
+- **D-07:** **NO password_hash field.** The spec (auth-rules.md) defines Google OAuth for owners/admins and Magic Link for invited users — no password-based auth exists anywhere in the system.
 
-- **D-07:** Use `bcryptjs` (pure JavaScript, no native deps) for password hashing. Do NOT use raw `crypto.pbkdf2` or algorithms.
-- **D-08:** **CRITICAL NOTE:** Password-based auth is a **temporary MVP solution** to get the full system working (signup → roles → login → recruiter UI). This MUST be replaced with **Google OAuth or Magic Link authentication** in a future phase (Phase 23+). Do NOT optimize password storage beyond what bcryptjs provides.
-- **D-09:** Password field is `password_hash` (storing hash, never plaintext). Hashing happens at signup; comparison happens at login via bcrypt.compare().
+### 3. Roles Model
 
-### 3.5. Role Model Schema
+- **D-08:** Roles are **fixed system-level roles** — no custom `roles` table. The 4 roles and their permissions are defined in application code (Phase 21 guard layer), not stored in the database.
 
-- **D-09a:** Create `roles` table with:
-  - `id` (UUID primary key)
-  - `organization_id` (FK to organizations.id, required)
-  - `name` (text, required — e.g., "Admin", "Recruiter", "Viewer")
-  - `permissions` (text[], required — PostgreSQL array of permission strings, e.g., `['org:settings:manage', 'team:manage']`)
-  - `created_at`, `updated_at` (timestamps with timezone)
+- **D-09:** Role values stored as text CHECK constraint on `users.role`:
+  - `'owner'` — full access + change/remove users; always the first person who created the org; cannot be changed or removed via UI per AUTH-006 and AUTH-007
+  - `'admin'` — everything Member + invite users + org settings + manage AI Agents per AUTH-006
+  - `'member'` — everything Viewer + create/edit Job Openings + move candidates per AUTH-006
+  - `'viewer'` — read-only access to Pipeline, Talent Pool, Reports per AUTH-006
 
-- **D-09b:** Unique constraint: `(organization_id, name)` — role names unique per organization.
+- **D-10:** The `'owner'` role can only be set programmatically at org creation (Phase 19). It cannot be assigned via invite (AUTH-003 invitation role dropdown is Admin/Member/Viewer only).
 
-- **D-09c:** Permissions stored as **PostgreSQL text array** for simplicity and easy future migration to JSONB. Support these base permissions:
-  - `org:settings:manage` — Manage organization details, roles, billing
-  - `team:manage` — Invite users, revoke access, change roles
-  - `jobs:read`, `jobs:write`, `jobs:delete` — Job and stage management
-  - `candidates:read`, `candidates:write`, `candidates:delete` — Candidate management
+### 4. Invitations Table Schema
 
-### 3.6. Invite Model Schema
-
-- **D-09d:** Create `invites` table with:
+- **D-11:** Create `invitations` table (named `invitations` to match spec terminology in AUTH-003/AUTH-004):
   - `id` (UUID primary key)
   - `organization_id` (FK to organizations.id, required)
   - `email` (text, required — email address being invited)
-  - `role_id` (FK to roles.id, required — role assigned on acceptance)
-  - `token` (text, unique — secure, time-limited acceptance token)
-  - `status` (text CHECK constraint: 'pending' | 'accepted' | 'expired')
-  - `expires_at` (timestamp with timezone — invite expiry time)
+  - `role` (text, required — CHECK constraint: `'admin'` | `'member'` | `'viewer'`) — role assigned on acceptance; `'owner'` cannot be invited per AUTH-003
+  - `token` (text, unique — secure, one-time acceptance token; valid 7 days per AUTH-003)
+  - `status` (text, required — CHECK constraint: `'pending'` | `'accepted'` | `'expired'`)
+  - `expires_at` (timestamp with timezone — 7 days from creation per AUTH-003)
+  - `invited_by_user_id` (FK to users.id, required — who sent the invite, for audit)
   - `created_at`, `updated_at` (timestamps with timezone)
 
-- **D-09e:** No unique constraint on (organization_id, email) for invites — same person can receive multiple pending invites to same org (allows re-sending).
+- **D-12:** No unique constraint on `(organization_id, email)` for invitations — same person can receive multiple invitations (allows re-send). However, application logic in Phase 20 must check for existing pending invitations before creating a new one (AUTH-003: error if pending invite exists).
 
-### 4. JWT Service Infrastructure
+- **D-13:** `token` must be unique across all invitations (not just per org) — prevents token collision attacks.
 
-- **D-10:** Create `src/auth/jwt.service.ts` with:
-  - `sign(payload: { userId: string; organizationId: string; role: string }, expiresIn?: string): string` — generates access token
-  - `verify(token: string): { userId: string; organizationId: string; role: string }` — validates and decodes token
+### 5. JWT Service Infrastructure
+
+- **D-14:** Create `src/auth/jwt.service.ts` with:
+  - `sign(payload: JwtPayload, options?: SignOptions): string` — generates access token
+  - `verify(token: string): JwtPayload` — validates and decodes token
   - Throws `UnauthorizedException` on invalid/expired tokens
-  - Uses `process.env.JWT_SECRET` (must be loaded from environment)
+  - Uses `process.env.JWT_SECRET` (loaded from environment, validated at startup)
 
-- **D-11:** JWT payload structure:
+- **D-15:** JWT payload structure:
 
   ```json
   {
     "sub": "user-id-uuid",
     "org": "organization-id-uuid",
-    "role": "admin|recruiter|viewer",
+    "role": "owner|admin|member|viewer",
     "iat": 1234567890,
     "exp": 1234571490
   }
   ```
 
-- **D-12:** Token expiry: **Access token = 15 minutes, Refresh token = 7 days** (decided in REQUIREMENTS.md AUTH-01, implemented in Phase 22).
+- **D-16:** Token expiry: **Access token = 15 minutes, Refresh token = 7 days** (per REQUIREMENTS.md AUTH-01). Convenience methods `signAccessToken()` and `signRefreshToken()` on the service.
 
-### 5. Environment Configuration
+### 6. Environment Configuration
 
-- **D-13:** Add `JWT_SECRET` to `.env.example` and validation schema (`src/config/env.ts`):
-  ```
-  JWT_SECRET=your-secret-key-min-32-chars
-  ```
-
-  - Validate that `JWT_SECRET.length >= 32` (minimum entropy for HMAC-SHA256)
+- **D-17:** Add `JWT_SECRET` to `.env.example` and validation schema (`src/config/env.ts`):
+  - Validate `JWT_SECRET.length >= 32` (minimum entropy for HMAC-SHA256)
   - Fail fast at startup if missing or too short
   - No auto-generation — must be explicitly provided
 
-### 6. Prisma Schema Changes
+### 7. Prisma Schema Changes
 
-- **D-14:** Create a **single Prisma migration** that:
-  1. Renames `Tenant` model to `Organization` (preserves table name via `@@map("organizations")`)
-  2. Adds new `User` model with role field
-  3. Adds new `Role` model with permissions array
-  4. Adds new `Invite` model with token and status fields
-  5. Updates all relations in existing models to reference `Organization` instead of `Tenant`
-  6. Adds CHECK constraint on users.role: `(role IN ('admin', 'recruiter', 'viewer'))`
-  7. Adds CHECK constraint on invites.status: `(status IN ('pending', 'accepted', 'expired'))`
-  8. Adds UNIQUE constraint on `(organization_id, email)` for users
-  9. Adds UNIQUE constraint on `(organization_id, name)` for roles
-  10. Adds UNIQUE constraint on `token` for invites
+- **D-18:** Create a **single Prisma migration** that:
+  1. Renames `Tenant` model to `Organization`
+  2. Adds new `User` model (with `auth_provider` and 4-value role CHECK)
+  3. Adds new `Invitation` model (with role CHECK: admin|member|viewer only)
+  4. Updates all relations in existing models to reference `Organization` instead of `Tenant`
+  5. Adds CHECK constraint on `users.role`: `(role IN ('owner', 'admin', 'member', 'viewer'))`
+  6. Adds CHECK constraint on `users.auth_provider`: `(auth_provider IN ('google', 'magic_link'))`
+  7. Adds CHECK constraint on `invitations.status`: `(status IN ('pending', 'accepted', 'expired'))`
+  8. Adds CHECK constraint on `invitations.role`: `(role IN ('admin', 'member', 'viewer'))`
+  9. Adds UNIQUE constraint on `(organization_id, email)` for users
+  10. Adds UNIQUE constraint on `token` for invitations
 
-- **D-15:** Existing v1.0 data (candidates, jobs, etc.) is **unaffected** — migration is purely additive for new tables and structural changes.
+- **D-19:** Existing v1.0 data (candidates, jobs, etc.) is **unaffected** — migration is purely additive.
 
-- **D-16:** Create Prisma `@relation` navigation from `Organization → User[]` and `User → Organization`.
+### 8. JwtService Integration
 
-### 7. JwtService Integration
+- **D-20:** Create `src/auth/auth.module.ts` that exports `JwtService` for dependency injection. No endpoints (Phase 19+).
 
-- **D-17:** Create `src/auth/auth.module.ts` that:
-  - Exports `JwtService` for use in other modules
-  - Does NOT include any endpoints (that's Phase 19+)
-  - Provides `JwtService` as a provider for dependency injection
-
-- **D-18:** `JwtService` is **not responsible** for token refresh logic, logout invalidation, or refresh token storage — those come in Phase 22. Phase 18 is signing/verification only.
-
-### 8. Validation at Startup
-
-- **D-19:** Update `src/config/env.ts` to validate:
-  - `JWT_SECRET` is present and >= 32 characters
-  - App fails immediately on startup if missing (don't continue with default or empty secret)
-
-- **D-20:** Validation happens in `src/app.module.ts` or via NestJS lifecycle hooks before the app starts listening.
+- **D-21:** `JwtService` is **not responsible** for token refresh logic, logout invalidation, or refresh token storage — those come in Phase 22.
 
 ### 9. Testing Strategy
 
-- **D-21:** Unit tests for `JwtService`:
+- **D-22:** Unit tests for `JwtService`:
   - `sign()` generates a valid JWT
   - `verify()` decodes and validates tokens correctly
   - `verify()` throws on expired/invalid tokens
-  - Payload contains correct user_id, organization_id, role
+  - Payload contains correct userId, organizationId, role
 
-- **D-22:** Prisma schema tests:
-  - Organizations table created with correct fields and constraints
-  - Users table created with role CHECK constraint and (organization_id, email) uniqueness
-  - Roles table created with permissions array and (organization_id, name) uniqueness
-  - Invites table created with token uniqueness and status CHECK constraint
-  - Foreign key relationships functional (users→organizations, roles→organizations, invites→organizations)
+- **D-23:** No integration tests with real auth endpoints in Phase 18 (endpoints come in Phase 19+).
 
-- **D-23:** No integration tests with real auth endpoints in Phase 18 (endpoints come in Phase 19).
+### Claude's Discretion
 
-### 10. Notes & Deprecation
+- Exact index definitions on invitations (beyond UNIQUE on token)
+- Migration file naming convention
+- Prisma model naming (singular PascalCase standard)
+</decisions>
 
-- **D-24:** Add a comment in `users.password_hash` field in schema.prisma:
+<canonical_refs>
+## Canonical References
 
-  ```prisma
-  password_hash String // TEMPORARY: Phase 19 MVP. Will be replaced by Google OAuth / Magic Link in Phase 23+
-  ```
+**Downstream agents MUST read these before planning or implementing.**
 
-- **D-25:** Do NOT implement password reset, password change, or advanced password policies in Phase 18 — those are out of scope. Phase 18 is schema + sign/verify only.
+### Auth behavior and role definitions (authoritative)
+- `spec/auth-rules.md` — Complete auth requirements: role definitions (AUTH-006), invite flow (AUTH-003/004), login methods (AUTH-005), user management (AUTH-007). **Supersedes REQUIREMENTS.md AUTH-02, AUTH-03, and RBAC-01 for role names and auth methods.**
 
-- **D-26:** Refresh token storage (database table for invalidation) is **Phase 22 scope**, not Phase 18.
+### Legacy requirements (partially superseded)
+- `.planning/REQUIREMENTS.md` §"Authentication & Sessions" — AUTH-01 (JWT token config) remains valid; AUTH-02/AUTH-03/RBAC-01 role names and auth methods superseded by spec/auth-rules.md
 
----
+### Project constraints
+- `CLAUDE.md` — Stack constraints (TypeScript, NestJS 11, Prisma 7, PostgreSQL 16), DB conventions (text + CHECK constraints over ENUMs, no binary blobs, @updatedAt)
+</canonical_refs>
 
-## Prior Context & Locked Decisions
+<code_context>
+## Existing Code Insights
 
-**From v1.0 (locked):**
+### Reusable Assets
+- `src/config/env.ts` (or equivalent config validation file) — existing Zod validation; extend to add `JWT_SECRET` field
+- `src/prisma/prisma.service.ts` — existing PrismaService, will automatically pick up new models after migration
+- `src/app.module.ts` — existing AppModule, add `AuthModule` import
 
-- Tech stack: TypeScript, NestJS 11, Prisma 7, PostgreSQL 16
-- Multi-tenancy from day 1: all tables have tenant_id (now organization_id)
-- Database-first approach: schema in Prisma, migrations clean
-- Environment variables validated at startup via @nestjs/config + Zod
+### Established Patterns
+- `text` fields + CHECK constraints over PostgreSQL ENUMs — use for `role`, `auth_provider`, `status` fields per CLAUDE.md
+- UUID primary keys with `@default(uuid())` — use for all new models
+- `@updatedAt` directive on `updated_at` fields — use on all new models
+- snake_case field names in Prisma schema (`organization_id`, `created_at`) — use consistently
+- Environment validation via `@nestjs/config` + Zod at startup — extend for `JWT_SECRET`
 
-**From v2.0 Planning:**
+### Integration Points
+- Existing v1.0 models (Job, Candidate, Application, etc.) reference `Tenant` via `tenantId` — all must be updated to reference `Organization` in Prisma relations, though the field names (`tenantId`) stay unchanged
+- `AppModule` imports new `AuthModule`; `JwtService` exportable for Phase 19/21 injection
+</code_context>
 
-- Phase 18 is a prerequisite — all other phases depend on schema
-- Phases 19–22 can be parallel after Phase 18 completes
-- Future: OAuth will replace password auth (out of scope for v2.0)
+<specifics>
+## Specific Ideas
 
----
+- Table name `invitations` (not `invites`) — matches spec/auth-rules.md terminology throughout AUTH-003 and AUTH-004
+- The `'owner'` role is special: it cannot be assigned via invitation (invite dropdown shows Admin/Member/Viewer only per AUTH-003). The owner role is set only at org creation time in Phase 19.
+- `invited_by_user_id` on invitations table — needed for Phase 20 audit/display (Settings → Team shows who sent pending invites)
+</specifics>
 
-## Success Criteria
+<deferred>
+## Deferred Ideas
 
-1. ✓ `organizations` table created with all required fields (name, shortId, created_by_user_id, timestamps)
-2. ✓ `users` table created with email, password_hash, organization_id FK, role CHECK, is_active flag
-3. ✓ `roles` table created with organization_id FK, name, permissions (text[])
-4. ✓ `invites` table created with organization_id FK, email, role_id FK, token (unique), status CHECK, expires_at
-5. ✓ Unique constraint on (organization_id, email) prevents duplicate users per org
-6. ✓ Unique constraint on (organization_id, name) prevents duplicate role names per org
-7. ✓ JwtService scaffolded with sign() and verify() methods
-8. ✓ JWT_SECRET validated at startup (>= 32 chars, fail fast if missing)
-9. ✓ Prisma migration runs cleanly; existing v1.0 data unaffected
-10. ✓ AuthModule created and exports JwtService for dependency injection
-11. ✓ All unit tests passing for JwtService and schema validation
+- Magic Link token generation and email sending — Phase 19/20 (invitation flow endpoints)
+- Google OAuth callback and session handling — Phase 19
+- Refresh token storage table (for invalidation) — Phase 22
+- Auth middleware / guards / role-based guards — Phase 21
+- Email notification when user removed (AUTH-007) — Phase 20
+- Role change immediate session invalidation strategy — Phase 21/22
+- Owner role transfer (out of scope per AUTH-007 constraints — requires manual DB change)
 
----
-
-## What's NOT in Phase 18
-
-- ❌ No API endpoints (POST /auth/signup, POST /auth/login, etc. — Phase 19+)
-- ❌ No role management endpoints (POST /admin/roles, etc. — Phase 20+)
-- ❌ No invite endpoints (POST /admin/invites, etc. — Phase 20+)
-- ❌ No auth middleware/guards (Phase 21)
-- ❌ No refresh token storage or invalidation logic (Phase 22)
-- ❌ No password reset, password change flows (future enhancement)
-- ❌ No OAuth integration (Phase 23+)
-- ❌ No email sending (Phase 19+ when user invites implemented)
-- ❌ No seed data for default roles (can be added in Phase 19+ as needed)
-
----
-
-## Known Risks & Mitigations
-
-| Risk                                                  | Mitigation                                                                   |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Renaming tenants → organizations breaks existing code | All existing models updated in same migration; tests validate relations      |
-| JWT_SECRET in env var exposed in logs                 | Validate secret length > 32; never log secret value; use `.env.gitignore`    |
-| Password field feels permanent                        | Add clear DEPRECATION comment in schema; plan Phase 23 OAuth swap in ROADMAP |
-| Migration conflicts with ongoing v1.0 work            | Phase 18 is schema-only; no changes to existing v1.0 endpoints               |
+### Note on REQUIREMENTS.md
+REQUIREMENTS.md AUTH-02 (password signup), AUTH-03 (password login), and RBAC-01 (3 roles: admin/recruiter/viewer) are superseded by spec/auth-rules.md. Phase 19+ planning should use spec/auth-rules.md as the authoritative source. Recommend updating REQUIREMENTS.md as a separate quick task.
+</deferred>
 
 ---
 
-**Ready for research and planning phases.**
+*Phase: 18-database-schema-jwt-infrastructure*
+*Context updated: 2026-04-09 (aligned with spec/auth-rules.md)*
