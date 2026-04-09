@@ -12,6 +12,7 @@ export const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1),
   R2_BUCKET_NAME: z.string().min(1),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 });
 
 export type Env = z.infer<typeof envSchema>;

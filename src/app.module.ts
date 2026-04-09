@@ -11,6 +11,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { AppConfigModule } from './config/app-config/app-config.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { HealthModule } from './health/health.module';
     ApplicationsModule,
     AppConfigModule,
     HealthModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

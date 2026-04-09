@@ -14,6 +14,7 @@ services:
       REDIS_URL: redis://redis:6379
       NODE_ENV: development
       TZ: Asia/Jerusalem
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,6 +34,7 @@ services:
       REDIS_URL: redis://redis:6379
       NODE_ENV: development
       TZ: Asia/Jerusalem
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy

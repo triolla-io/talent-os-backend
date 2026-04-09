@@ -20,7 +20,7 @@ export class JwtService {
   }
 
   async sign(payload: JwtPayload, expiresIn = '15m'): Promise<string> {
-    return new SignJWT(payload as Record<string, unknown>)
+    return new SignJWT(payload as unknown as Record<string, unknown>)
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime(expiresIn)
