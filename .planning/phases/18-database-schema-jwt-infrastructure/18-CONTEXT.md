@@ -119,7 +119,6 @@ This phase is a **prerequisite for Phase 19–22** (signup flow, admin endpoints
 ### 7. Prisma Schema Changes — Split Migration
 
 - **D-20:** **Split schema updates into two stages, each generating its own migration.** The schema file must NOT be updated all at once — doing so causes the first `--create-only` to capture all changes, leaving the second `--create-only` empty.
-
   - **Stage 1 (schema update + Migration 1):** Update `prisma/schema.prisma` with ONLY the Organization changes:
     - Rename `model Tenant` → `model Organization` (keep `@@map("tenants")`)
     - Add new Organization fields: `shortId`, `logoUrl`, `isActive`, `createdByUserId`, `updatedAt`
