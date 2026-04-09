@@ -14,7 +14,7 @@ model Organization {
   shortId          String?   @unique @map("short_id") @db.VarChar(20)
   logoUrl          String?   @map("logo_url") @db.Text
   isActive         Boolean   @default(true) @map("is_active")
-  createdByUserId  String?   @map("created_by_user_id") @db.Uuid
+  createdByUserId  String?   @unique @map("created_by_user_id") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -29,10 +29,57 @@ model Organization {
   screeningQuestions      ScreeningQuestion[]
   candidateStageSummaries CandidateStageSummary[]
 
-  // Relations — v2.0 relations (added in Task 4 when User model exists)
-  // users, invitations, createdBy — NOT added yet; added in Task 4
+  // Relations — v2.0 relations
+  users       User[]
+  invitations Invitation[]
+  createdBy   User?        @relation("OrgCreator", fields: [createdByUserId], references: [id])
 
   @@map("tenants")
+}
+
+// ─── users ────────────────────────────────────────────────────────────────────
+model User {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String   @db.Text
+  authProvider   String   @map("auth_provider") @db.Text
+  organizationId String   @map("organization_id") @db.Uuid
+  role           String   @db.Text
+  fullName       String?  @map("full_name") @db.Text
+  isActive       Boolean  @default(true) @map("is_active")
+  providerId     String?  @map("provider_id") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  organization        Organization  @relation(fields: [organizationId], references: [id])
+  createdOrganization Organization? @relation("OrgCreator")
+  sentInvitations     Invitation[]  @relation("InvitedBy")
+
+  @@unique([organizationId, email], name: "idx_users_org_email")
+  @@index([organizationId], name: "idx_users_org")
+  @@map("users")
+}
+
+// ─── invitations ──────────────────────────────────────────────────────────────
+model Invitation {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  email            String   @db.Text
+  role             String   @db.Text
+  token            String   @unique @db.Text
+  status           String   @default("pending") @db.Text
+  expiresAt        DateTime @map("expires_at") @db.Timestamptz
+  invitedByUserId  String   @map("invited_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invitedBy    User         @relation("InvitedBy", fields: [invitedByUserId], references: [id])
+
+  // D-14: composite index for "does a pending invitation exist for this email in this org?" query
+  @@index([organizationId, email, status], name: "idx_invitations_org_email_status")
+  @@map("invitations")
 }
 
 // ─── jobs ─────────────────────────────────────────────────────────────────────
