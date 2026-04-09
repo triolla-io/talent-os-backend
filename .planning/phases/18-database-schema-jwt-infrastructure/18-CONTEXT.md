@@ -25,7 +25,7 @@ This phase is a **prerequisite for Phase 19–22** (signup flow, admin endpoints
 - **D-03:** `Organization` model structure:
   - `id` (UUID primary key)
   - `name` (text, required — org display name)
-  - `shortId` (varchar(20), unique per database — slug-like identifier for email subject routing, e.g., "triol-01")
+  - `shortId` (varchar(20), unique per database, **nullable** — set at org creation time. Made `String?` to avoid NOT NULL constraint violation on existing tenant rows during migration. v1.0 org rows have NULL shortId until first written)
   - `logo_url` (text, nullable — org logo for onboarding UI; required by AUTH-002 but uploaded post-creation)
   - `is_active` (boolean, default true — soft-delete flag, reserved for future use)
   - `created_by_user_id` (UUID FK to users.id, nullable — set after first user created; see chicken-and-egg note in D-26)
@@ -118,9 +118,25 @@ This phase is a **prerequisite for Phase 19–22** (signup flow, admin endpoints
 
 ### 7. Prisma Schema Changes — Split Migration
 
-- **D-20:** **Split into two separate migrations** (not one) to isolate risk:
-  - **Migration 1:** Prisma model rename only — rename `Tenant` → `Organization` in schema, `@@map("tenants")` already present, no DB change. This generates an empty or near-empty migration SQL that can be validated cleanly.
-  - **Migration 2:** Add `User` and `Invitation` models with all fields, constraints, and indexes.
+- **D-20:** **Split schema updates into two stages, each generating its own migration.** The schema file must NOT be updated all at once — doing so causes the first `--create-only` to capture all changes, leaving the second `--create-only` empty.
+
+  - **Stage 1 (schema update + Migration 1):** Update `prisma/schema.prisma` with ONLY the Organization changes:
+    - Rename `model Tenant` → `model Organization` (keep `@@map("tenants")`)
+    - Add new Organization fields: `shortId`, `logoUrl`, `isActive`, `createdByUserId`, `updatedAt`
+    - Update relation type references in v1.0 models (`Tenant @relation` → `Organization @relation`)
+    - Update `prisma/seed.ts` (`prisma.tenant.upsert` → `prisma.organization.upsert`)
+    - Do NOT add `User` or `Invitation` models yet
+    - Run `prisma migrate dev --create-only --name rename_tenant_organization_fields`
+    - Migration 1 WILL contain `ALTER TABLE "tenants" ADD COLUMN` statements for the new fields — **this is expected and safe (additive)**. Forbidden: RENAME TO, DROP TABLE, ALTER COLUMN on existing columns.
+    - Edit migration SQL to add `DEFAULT NOW()` on `updated_at` column before applying (see D-29)
+    - Apply with: `npx prisma migrate dev` (no `--name` flag — see D-31)
+
+  - **Stage 2 (schema update + Migration 2):** After Migration 1 is applied:
+    - Add `User` and `Invitation` models to schema
+    - Run `prisma migrate dev --create-only --name add_user_invitation_tables`
+    - Migration 2 will contain `CREATE TABLE "users"` and `CREATE TABLE "invitations"` only
+    - Append CHECK constraints (see D-21)
+    - Apply with: `npx prisma migrate dev` (no `--name` flag)
 
 - **D-21:** Each migration adds raw SQL CHECK constraints (Prisma doesn't support these natively). Constraints to add:
   - `users.role IN ('owner', 'admin', 'member', 'viewer')`
@@ -128,7 +144,15 @@ This phase is a **prerequisite for Phase 19–22** (signup flow, admin endpoints
   - `invitations.status IN ('pending', 'accepted', 'expired')`
   - `invitations.role IN ('admin', 'member', 'viewer')`
 
-- **D-22:** Existing v1.0 data (candidates, jobs, etc.) is **unaffected** — Migration 1 is a zero-change rename; Migration 2 is purely additive.
+- **D-22:** Existing v1.0 data (candidates, jobs, etc.) is **unaffected** — both migrations are purely additive (`ADD COLUMN` / `CREATE TABLE`).
+
+- **D-29:** The `updatedAt` field (`@updatedAt`) generates as `NOT NULL` in migration SQL. Before applying Migration 1, manually edit the `--create-only` SQL file to add `DEFAULT NOW()` to the `updated_at` column in the `ALTER TABLE "tenants"` statement. Without this, PostgreSQL throws a NOT NULL constraint violation on existing tenant rows.
+
+- **D-30:** After Stage 1's `npx prisma generate`, do a project-wide find-and-replace across all `src/` files: `prisma.tenant` → `prisma.organization`. Run this BEFORE any TypeScript compilation checks. Remaining `prisma.tenant` references in other modules will cause TS errors since the generated client no longer exports that accessor.
+
+- **D-31:** Relation field names in v1.0 models intentionally remain `tenant` (the Prisma field name). The relation TYPE changes from `Tenant` to `Organization`. Access pattern: `entity.tenant.name` (correct), `entity.organization.name` (does not exist). This is a deliberate choice to avoid DB column renames. Add a code comment in each v1.0 model: `// relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md`
+
+- **D-32:** After `--create-only`, always apply a pending migration with `npx prisma migrate dev` (or `npm run db:migrate`) — **no `--name` flag**. Using `--name` after `--create-only` creates a second new migration instead of applying the pending one.
 
 ### 8. Seed File Update
 
@@ -243,4 +267,4 @@ REQUIREMENTS.md AUTH-02 (password signup), AUTH-03 (password login), and RBAC-01
 ---
 
 _Phase: 18-database-schema-jwt-infrastructure_
-_Context updated: 2026-04-09 (plan review corrections: @@map approach, logo_url, jose JWT, invitations index, shortId utility, chicken-and-egg doc, JWT_SECRET first-class, split migrations, seed file update)_
+_Context updated: 2026-04-09 (plan corrections round 2: shortId nullable, two-stage schema split, Migration 1 allows ADD COLUMN, updatedAt DEFAULT NOW(), prisma.tenant global find-replace, --name flag removed from apply step, relation field naming documented)_
