@@ -137,11 +137,7 @@ export class TeamService {
     await this.prisma.invitation.delete({ where: { id: invitationId } });
   }
 
-  async changeRole(
-    session: JwtPayload,
-    targetUserId: string,
-    newRole: string,
-  ): Promise<{ success: true }> {
+  async changeRole(session: JwtPayload, targetUserId: string, newRole: string): Promise<{ success: true }> {
     // CR-03: validate role — 'owner' cannot be assigned via this endpoint either
     const ALLOWED_CHANGE_ROLES = ['admin', 'member', 'viewer'];
     if (!ALLOWED_CHANGE_ROLES.includes(newRole)) {

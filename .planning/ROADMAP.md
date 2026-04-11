@@ -77,14 +77,14 @@ Plans:
 15. Google OAuth stub: code structured so `GOOGLE_CLIENT_ID` env var enables real verification; works in dev without it
 16. All error responses use standard `{ error: { code, message, details? } }` format
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 
-- [ ] 19-01-PLAN.md — Schema migration (onboardingCompletedAt) + SessionGuard + EmailService + Wave 0 test stubs
-- [ ] 19-02-PLAN.md — Core session endpoints: GET /auth/me, POST /auth/google/verify, POST /auth/logout
-- [ ] 19-03-PLAN.md — Onboarding + magic link + invitation acceptance endpoints
-- [ ] 19-04-PLAN.md — Team management: members, invitations, role changes, member removal
+- [x] 19-01-PLAN.md — Schema migration (onboardingCompletedAt) + SessionGuard + EmailService + Wave 0 test stubs
+- [x] 19-02-PLAN.md — Core session endpoints: GET /auth/me, POST /auth/google/verify, POST /auth/logout
+- [x] 19-03-PLAN.md — Onboarding + magic link + invitation acceptance endpoints
+- [x] 19-04-PLAN.md — Team management: members, invitations, role changes, member removal
 
 ## Phase 2: Webhook Intake & Idempotency (v1.0 - ARCHIVED)
 
@@ -416,7 +416,7 @@ Plans:
 | Phase                                    | Plans Complete | Status   | Started    |
 | ---------------------------------------- | -------------- | -------- | ---------- |
 | 18. Database Schema & JWT Infrastructure | 1/1            | Complete | 2026-04-09 |
-| 19. Auth API Endpoints                   | 0/0            | Pending  | —          |
+| 19. Auth API Endpoints                   | 4/4 | Complete   | 2026-04-11 |
 
 ---
 

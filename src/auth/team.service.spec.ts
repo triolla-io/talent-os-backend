@@ -165,9 +165,7 @@ describe('TeamService', () => {
     await expect(service.createInvitation(ownerSession, 'member@company.com', 'admin')).rejects.toThrow(
       ConflictException,
     );
-    await expect(
-      service.createInvitation(ownerSession, 'member@company.com', 'admin'),
-    ).rejects.toMatchObject({
+    await expect(service.createInvitation(ownerSession, 'member@company.com', 'admin')).rejects.toMatchObject({
       response: { code: 'ALREADY_MEMBER' },
     });
   });
@@ -179,9 +177,7 @@ describe('TeamService', () => {
     await expect(service.createInvitation(ownerSession, 'newbie@company.com', 'admin')).rejects.toThrow(
       ConflictException,
     );
-    await expect(
-      service.createInvitation(ownerSession, 'newbie@company.com', 'admin'),
-    ).rejects.toMatchObject({
+    await expect(service.createInvitation(ownerSession, 'newbie@company.com', 'admin')).rejects.toMatchObject({
       response: { code: 'PENDING_INVITATION' },
     });
   });
@@ -223,18 +219,14 @@ describe('TeamService', () => {
   // ─── changeRole ────────────────────────────────────────────────────────────
 
   it('Test 6: changeRole throws ForbiddenException when caller role !== owner', async () => {
-    await expect(service.changeRole(memberSession, 'another-user-uuid', 'admin')).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(service.changeRole(memberSession, 'another-user-uuid', 'admin')).rejects.toThrow(ForbiddenException);
   });
 
   it('Test 7: changeRole throws ForbiddenException when target user role === owner', async () => {
     const targetOwner = { ...mockUsers[0], id: 'other-owner-uuid', role: 'owner' };
     (prisma.user.findFirst as jest.Mock).mockResolvedValue(targetOwner);
 
-    await expect(service.changeRole(ownerSession, 'other-owner-uuid', 'admin')).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(service.changeRole(ownerSession, 'other-owner-uuid', 'admin')).rejects.toThrow(ForbiddenException);
   });
 
   it('Test 8: changeRole updates user.role and returns { success: true }', async () => {

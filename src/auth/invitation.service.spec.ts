@@ -210,12 +210,7 @@ describe('InvitationService', () => {
     await service.generateAndStoreMagicLink('user@example.com');
 
     // Should call redis.set with ml:{token}, userId, 'EX', 3600
-    expect(mockRedis.set).toHaveBeenCalledWith(
-      expect.stringMatching(/^ml:/),
-      mockUser.id,
-      'EX',
-      3600,
-    );
+    expect(mockRedis.set).toHaveBeenCalledWith(expect.stringMatching(/^ml:/), mockUser.id, 'EX', 3600);
     expect(emailService.sendMagicLinkEmail).toHaveBeenCalledWith('user@example.com', expect.any(String));
   });
 

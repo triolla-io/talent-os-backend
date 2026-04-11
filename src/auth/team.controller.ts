@@ -1,15 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Param,
-  Patch,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { SessionGuard } from './session.guard';
 import { TeamService } from './team.service';
@@ -36,11 +25,7 @@ export class TeamController {
   // POST /auth/team/invitations — 201 Created
   @Post('invitations')
   @HttpCode(201)
-  createInvitation(
-    @Req() req: Request,
-    @Body('email') email: string,
-    @Body('role') role: string,
-  ) {
+  createInvitation(@Req() req: Request, @Body('email') email: string, @Body('role') role: string) {
     if (!email || !role) {
       return { error: { code: 'VALIDATION_ERROR', message: 'email and role are required' } };
     }
@@ -56,11 +41,7 @@ export class TeamController {
 
   // PATCH /auth/team/members/:id/role — 200
   @Patch('members/:id/role')
-  changeRole(
-    @Req() req: Request,
-    @Param('id') id: string,
-    @Body('role') role: string,
-  ) {
+  changeRole(@Req() req: Request, @Param('id') id: string, @Body('role') role: string) {
     return this.teamService.changeRole(req.session as JwtPayload, id, role);
   }
 

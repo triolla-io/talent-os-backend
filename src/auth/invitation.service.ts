@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  GoneException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import Redis from 'ioredis';
@@ -31,6 +26,7 @@ export class InvitationService {
   /** D-05/D-06: Generate a magic link token, store in Redis, send email */
   async generateAndStoreMagicLink(email: string): Promise<void> {
     const user = await this.prisma.user.findFirst({ where: { email, isActive: true } });
+    console.log({ user });
     if (!user) return; // D-07: never reveal email existence — return silently
 
     if (user.authProvider === 'google') {

@@ -93,21 +93,19 @@ describe('AuthService', () => {
     (mockPrisma.user.findFirst as jest.Mock).mockResolvedValue(null);
 
     // $transaction mock: calls the callback with a tx object
-    (mockPrisma.$transaction as jest.Mock).mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          organization: {
-            create: jest.fn().mockResolvedValue(mockOrg),
-            update: jest.fn().mockResolvedValue({ ...mockOrg, createdByUserId: 'user-uuid' }),
-            findUnique: jest.fn().mockResolvedValue(null), // for shortId uniqueness check
-          },
-          user: {
-            create: jest.fn().mockResolvedValue(mockUser),
-          },
-        };
-        return fn(tx);
-      },
-    );
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        organization: {
+          create: jest.fn().mockResolvedValue(mockOrg),
+          update: jest.fn().mockResolvedValue({ ...mockOrg, createdByUserId: 'user-uuid' }),
+          findUnique: jest.fn().mockResolvedValue(null), // for shortId uniqueness check
+        },
+        user: {
+          create: jest.fn().mockResolvedValue(mockUser),
+        },
+      };
+      return fn(tx);
+    });
 
     // Dev stub token: plain JSON { email, name }
     const accessToken = JSON.stringify({ email: 'test@example.com', name: 'Test User' });
@@ -183,21 +181,19 @@ describe('AuthService', () => {
   it('devParseToken parses plain JSON access_token when GOOGLE_CLIENT_ID is absent', async () => {
     (mockPrisma.user.findFirst as jest.Mock).mockResolvedValue(null);
 
-    (mockPrisma.$transaction as jest.Mock).mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          organization: {
-            create: jest.fn().mockResolvedValue(mockOrg),
-            update: jest.fn().mockResolvedValue(mockOrg),
-            findUnique: jest.fn().mockResolvedValue(null),
-          },
-          user: {
-            create: jest.fn().mockResolvedValue(mockUser),
-          },
-        };
-        return fn(tx);
-      },
-    );
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        organization: {
+          create: jest.fn().mockResolvedValue(mockOrg),
+          update: jest.fn().mockResolvedValue(mockOrg),
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+        user: {
+          create: jest.fn().mockResolvedValue(mockUser),
+        },
+      };
+      return fn(tx);
+    });
 
     // Plain JSON (not base64) — dev stub
     const accessToken = JSON.stringify({ email: 'dev@stub.com', name: 'Dev User' });

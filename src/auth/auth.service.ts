@@ -30,9 +30,7 @@ export class AuthService {
    * D-19/D-20: Fetch user info from Google or dev-stub.
    * If GOOGLE_CLIENT_ID is absent (or NODE_ENV !== 'production'), parse access_token as JSON.
    */
-  private async fetchGoogleUserInfo(
-    accessToken: string,
-  ): Promise<{ email: string; name: string; sub?: string }> {
+  private async fetchGoogleUserInfo(accessToken: string): Promise<{ email: string; name: string; sub?: string }> {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
 
@@ -68,9 +66,7 @@ export class AuthService {
   /**
    * D-21/D-22/D-23: Google sign-up or sign-in flow.
    */
-  async googleVerify(
-    accessToken: string,
-  ): Promise<{ meResponse: MeResponse; sessionToken: string }> {
+  async googleVerify(accessToken: string): Promise<{ meResponse: MeResponse; sessionToken: string }> {
     const googleUser = await this.fetchGoogleUserInfo(accessToken);
     const email = googleUser.email;
 

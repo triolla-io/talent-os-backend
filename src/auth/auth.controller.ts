@@ -1,4 +1,17 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import * as express from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -43,10 +56,7 @@ export class AuthController {
   // POST /auth/google/verify — D-17: no SessionGuard (public endpoint)
   @Post('google/verify')
   @HttpCode(200)
-  async googleVerify(
-    @Body('access_token') accessToken: string,
-    @Res({ passthrough: true }) res: express.Response,
-  ) {
+  async googleVerify(@Body('access_token') accessToken: string, @Res({ passthrough: true }) res: express.Response) {
     if (!accessToken) {
       return { error: { code: 'VALIDATION_ERROR', message: 'access_token is required', details: {} } };
     }
@@ -105,10 +115,7 @@ export class AuthController {
   // GET /auth/magic-link/verify — D-07: validates token, sets session cookie, redirects to /
   // D-17: public endpoint (no guard)
   @Get('magic-link/verify')
-  async verifyMagicLink(
-    @Query('token') token: string,
-    @Res() res: express.Response,
-  ) {
+  async verifyMagicLink(@Query('token') token: string, @Res() res: express.Response) {
     if (!token) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Token is required' } });
       return;
@@ -140,10 +147,7 @@ export class AuthController {
   // POST /auth/invite/:token/accept — D-17: public; creates user + sets session cookie
   @Post('invite/:token/accept')
   @HttpCode(200)
-  async acceptInvite(
-    @Param('token') token: string,
-    @Res({ passthrough: true }) res: express.Response,
-  ) {
+  async acceptInvite(@Param('token') token: string, @Res({ passthrough: true }) res: express.Response) {
     const { meResponse, sessionToken } = await this.invitationService.acceptInvite(token);
     setSessionCookie(res, sessionToken);
     return meResponse;
