@@ -1,0 +1,69 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+
+@Injectable()
+export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+  private readonly frontendUrl: string;
+  private readonly isDev: boolean;
+
+  constructor(private readonly configService: ConfigService) {
+    this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+    this.isDev = this.configService.get<string>('NODE_ENV') !== 'production';
+  }
+
+  private createTransport() {
+    const host = this.configService.get<string>('SMTP_HOST');
+    if (!host) return null; // dev fallback
+    return nodemailer.createTransport({
+      host,
+      port: this.configService.get<number>('SMTP_PORT') ?? 587,
+      auth: {
+        user: this.configService.get<string>('SMTP_USER'),
+        pass: this.configService.get<string>('SMTP_PASS'),
+      },
+    });
+  }
+
+  private async sendOrLog(to: string, subject: string, text: string): Promise<void> {
+    const transport = this.createTransport();
+    if (!transport) {
+      // D-12: dev fallback — log instead of throw when SMTP_HOST absent
+      this.logger.log({ to, subject, text }, '[EmailService DEV] Would send email:');
+      return;
+    }
+    await transport.sendMail({
+      from: this.configService.get<string>('SMTP_FROM', 'noreply@talentos.triolla.io'),
+      to,
+      subject,
+      text,
+    });
+  }
+
+  async sendInvitationEmail(to: string, orgName: string, role: string, token: string): Promise<void> {
+    const link = `${this.frontendUrl}/invite?token=${token}`;
+    await this.sendOrLog(
+      to,
+      `You've been invited to join ${orgName} on Talent OS`,
+      `You've been invited to join ${orgName} as ${role}.\n\nClick the link to accept: ${link}\n\nThis link expires in 7 days.`,
+    );
+  }
+
+  async sendMagicLinkEmail(to: string, token: string): Promise<void> {
+    const link = `${this.frontendUrl}/auth/magic-link/verify?token=${token}`;
+    await this.sendOrLog(
+      to,
+      'Your Talent OS login link',
+      `Click this link to log in to Talent OS:\n\n${link}\n\nThis link expires in 1 hour and can only be used once.`,
+    );
+  }
+
+  async sendUseGoogleEmail(to: string): Promise<void> {
+    await this.sendOrLog(
+      to,
+      'Log in with Google',
+      `Your account uses Google Sign-In. Please click "Continue with Google" on the login page to access Talent OS.`,
+    );
+  }
+}
