@@ -19,7 +19,7 @@ export const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
-  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  FRONTEND_URL: z.url().default('http://localhost:5173'),
   GOOGLE_CLIENT_ID: z.string().optional(),
 });
 
