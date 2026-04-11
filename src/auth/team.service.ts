@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -57,6 +58,15 @@ export class TeamService {
     email: string,
     role: string,
   ): Promise<{ id: string; email: string; role: string; expires_at: string }> {
+    // CR-03: validate role — 'owner' is not grantable via invitation (privilege escalation vector)
+    const ALLOWED_INVITATION_ROLES = ['admin', 'member', 'viewer'];
+    if (!ALLOWED_INVITATION_ROLES.includes(role)) {
+      throw new BadRequestException({
+        code: 'INVALID_ROLE',
+        message: `Role must be one of: ${ALLOWED_INVITATION_ROLES.join(', ')}`,
+      });
+    }
+
     // Check ALREADY_MEMBER
     const existing = await this.prisma.user.findFirst({
       where: { organizationId: session.org, email, isActive: true },
@@ -132,6 +142,15 @@ export class TeamService {
     targetUserId: string,
     newRole: string,
   ): Promise<{ success: true }> {
+    // CR-03: validate role — 'owner' cannot be assigned via this endpoint either
+    const ALLOWED_CHANGE_ROLES = ['admin', 'member', 'viewer'];
+    if (!ALLOWED_CHANGE_ROLES.includes(newRole)) {
+      throw new BadRequestException({
+        code: 'INVALID_ROLE',
+        message: `Role must be one of: ${ALLOWED_CHANGE_ROLES.join(', ')}`,
+      });
+    }
+
     // D-18: inline role enforcement — Owner only
     if (session.role !== 'owner') {
       throw new ForbiddenException('Only the Owner can change member roles');
