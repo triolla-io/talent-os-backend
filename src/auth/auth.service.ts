@@ -28,7 +28,8 @@ export class AuthService {
 
   /**
    * D-19/D-20: Fetch user info from Google or dev-stub.
-   * If GOOGLE_CLIENT_ID is absent (or NODE_ENV !== 'production'), parse access_token as JSON.
+   * If GOOGLE_CLIENT_ID is present, always call the real Google UserInfo API.
+   * If GOOGLE_CLIENT_ID is absent, fall back to dev stub (non-prod only).
    */
   private async fetchGoogleUserInfo(accessToken: string): Promise<{ email: string; name: string; sub?: string }> {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
@@ -39,28 +40,27 @@ export class AuthService {
       throw new UnauthorizedException('Google Sign-In is not configured');
     }
 
-    if (!isProd) {
-      // D-20: dev stub — parse access_token as JSON { email, name }
-      // Only active in non-production environments; never active in production
-      // Try base64 first, then plain JSON
-      try {
-        const decoded = Buffer.from(accessToken, 'base64').toString('utf-8');
-        return JSON.parse(decoded) as { email: string; name: string };
-      } catch {
-        try {
-          return JSON.parse(accessToken) as { email: string; name: string };
-        } catch {
-          throw new UnauthorizedException('Invalid dev stub token (expected JSON { email, name })');
-        }
-      }
+    // If GOOGLE_CLIENT_ID is configured, use real Google UserInfo API regardless of environment
+    if (clientId) {
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new UnauthorizedException('Google token verification failed');
+      return res.json() as Promise<{ email: string; name: string; sub: string }>;
     }
 
-    // Production: call Google UserInfo API (T-19-06: backend re-validates token)
-    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) throw new UnauthorizedException('Google token verification failed');
-    return res.json() as Promise<{ email: string; name: string; sub: string }>;
+    // D-20: dev stub — only active when GOOGLE_CLIENT_ID is absent in non-production environments
+    // Parse access_token as JSON { email, name } (base64 or plain)
+    try {
+      const decoded = Buffer.from(accessToken, 'base64').toString('utf-8');
+      return JSON.parse(decoded) as { email: string; name: string };
+    } catch {
+      try {
+        return JSON.parse(accessToken) as { email: string; name: string };
+      } catch {
+        throw new UnauthorizedException('Invalid dev stub token (expected JSON { email, name })');
+      }
+    }
   }
 
   /**
