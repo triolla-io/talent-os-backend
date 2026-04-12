@@ -112,10 +112,10 @@ export class AuthController {
     return { success: true }; // always 200 — no email enumeration (T-19-11)
   }
 
-  // GET /auth/magic-link/verify — D-07: validates token, sets session cookie, redirects to /
+  // GET /auth/magic-link/verify — D-07: validates token, sets session cookie, returns JSON success
   // D-17: public endpoint (no guard)
   @Get('magic-link/verify')
-  async verifyMagicLink(@Query('token') token: string, @Res() res: express.Response) {
+  async verifyMagicLink(@Query('token') token: string, @Res({ passthrough: true }) res: express.Response) {
     if (!token) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Token is required' } });
       return;
@@ -128,14 +128,15 @@ export class AuthController {
       return;
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: result.userId } });
-    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: user.organizationId } });
     const sessionToken = await this.jwtService.signRefreshToken({
       sub: user.id,
       org: user.organizationId,
       role: user.role as JwtPayload['role'],
     });
     setSessionCookie(res, sessionToken);
-    res.redirect('/');
+
+    // CHANGED: Instead of redirect, return a simple JSON response so the SPA can handle routing
+    return { success: true };
   }
 
   // GET /auth/invite/:token — D-17: public; returns invitation details for confirmation page

@@ -15,8 +15,8 @@ describe('EmailService', () => {
     service = module.get<EmailService>(EmailService);
   });
 
-  it.todo('logs to console when RESEND_API_KEY is absent in dev (D-12)');
-  it.todo('calls resend.emails.send when RESEND_API_KEY is set');
+  it.todo('logs to console when SMTP_HOST is absent in dev (D-12)');
+  it.todo('calls transport.sendMail when SMTP_HOST is set');
   it.todo('sendInvitationEmail includes invite link with token');
   it.todo('sendMagicLinkEmail includes magic link URL with token');
   it.todo('sendUseGoogleEmail tells user to use Google login');
