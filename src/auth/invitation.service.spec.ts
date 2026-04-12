@@ -7,6 +7,7 @@ const mockRedis = {
   set: jest.fn(),
   get: jest.fn(),
   del: jest.fn(),
+  getdel: jest.fn(),
 };
 jest.mock('ioredis', () => {
   return jest.fn().mockImplementation(() => mockRedis);
@@ -176,9 +177,13 @@ describe('InvitationService', () => {
       fullName: null,
       isActive: true,
     };
-    (prisma.$transaction as jest.Mock).mockImplementation(async (fn: (tx: unknown) => unknown) => {
+    (prisma.$transaction as jest.Mock).mockImplementation(async (fn: (tx: any) => unknown) => {
       const tx = {
-        user: { create: jest.fn().mockResolvedValue(mockUser) },
+        user: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue(mockUser),
+          update: jest.fn(),
+        },
         invitation: { update: jest.fn().mockResolvedValue(undefined) },
       };
       return fn(tx);
@@ -216,22 +221,21 @@ describe('InvitationService', () => {
 
   // ─── verifyMagicLink ───────────────────────────────────────────────────────
 
-  it('Test 7: verifyMagicLink returns null for unknown token (key not found in Redis)', async () => {
-    mockRedis.get.mockResolvedValue(null);
+  it('Test 7: verifyMagicLink returns "not_found" for unknown token (key not found in Redis)', async () => {
+    mockRedis.getdel.mockResolvedValue(null);
 
     const result = await service.verifyMagicLink('unknown-token');
 
-    expect(result).toBeNull();
-    expect(mockRedis.del).not.toHaveBeenCalled();
+    expect(result).toBe('not_found');
+    expect(mockRedis.getdel).toHaveBeenCalledWith('ml:unknown-token');
   });
 
   it('Test 8: verifyMagicLink deletes Redis key after successful lookup (one-time use)', async () => {
-    mockRedis.get.mockResolvedValue('user-uuid-1');
-    mockRedis.del.mockResolvedValue(1);
+    mockRedis.getdel.mockResolvedValue('user-uuid-1');
 
     const result = await service.verifyMagicLink('valid-token');
 
     expect(result).toEqual({ userId: 'user-uuid-1' });
-    expect(mockRedis.del).toHaveBeenCalledWith('ml:valid-token');
+    expect(mockRedis.getdel).toHaveBeenCalledWith('ml:valid-token');
   });
 });
