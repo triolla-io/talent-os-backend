@@ -6,7 +6,7 @@ export const UpdateCandidateSchema = z.object({
     .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Invalid UUID')
     .optional(),
   full_name: z.string().optional(),
-  email: z.email().optional(),
+  email: z.preprocess((v) => (v === '' ? undefined : v), z.email().optional()),
   phone: z.string().optional(),
   current_role: z.string().optional(),
   location: z.string().optional(),
