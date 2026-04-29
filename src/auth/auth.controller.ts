@@ -5,7 +5,6 @@ import {
   HttpCode,
   Param,
   Post,
-  Query,
   Req,
   Res,
   UseGuards,
@@ -111,10 +110,11 @@ export class AuthController {
     return { success: true }; // always 200 — no email enumeration (T-19-11)
   }
 
-  // GET /auth/magic-link/verify — D-07: validates token, sets session cookie, returns JSON success
+  // POST /auth/magic-link/verify — D-07: validates token, sets session cookie, returns JSON success
   // D-17: public endpoint (no guard)
-  @Get('magic-link/verify')
-  async verifyMagicLink(@Query('token') token: string, @Res({ passthrough: true }) res: express.Response) {
+  @Post('magic-link/verify')
+  @HttpCode(200)
+  async verifyMagicLink(@Body('token') token: string, @Res({ passthrough: true }) res: express.Response) {
     if (!token) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Token is required' } });
       return;
