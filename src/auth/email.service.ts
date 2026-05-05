@@ -31,7 +31,7 @@ export class EmailService {
   private async sendOrLog(to: string, subject: string, text: string): Promise<void> {
     if (!this.transport) {
       // D-12: dev fallback — log instead of throw when SMTP_HOST absent
-      this.logger.log({ to, subject, text }, '[EmailService DEV] Would send email:');
+      this.logger.log(`[EmailService DEV] Would send email to ${to}: ${subject}`);
       return;
     }
     await this.transport.sendMail({
