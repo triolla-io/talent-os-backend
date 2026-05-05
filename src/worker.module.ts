@@ -19,6 +19,7 @@ import { IngestionModule } from './ingestion/ingestion.module';
             ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
             : undefined,
         level: process.env.LOG_LEVEL ?? 'info',
+        redact: ['req.headers.authorization', 'req.headers.cookie'],
       },
     }),
     PrismaModule,

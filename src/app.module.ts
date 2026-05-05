@@ -26,6 +26,7 @@ import { AuthModule } from './auth/auth.module';
             ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
             : undefined,
         level: process.env.LOG_LEVEL ?? 'info',
+        redact: ['req.headers.authorization', 'req.headers.cookie'],
       },
     }),
     // D-15: Rate limiting — 100 requests per 60-second window per IP
