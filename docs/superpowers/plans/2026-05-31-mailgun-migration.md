@@ -13,12 +13,14 @@
 ## File Map
 
 **New files**
+
 - `src/webhooks/dto/mailgun-payload.dto.ts` — Zod schema for raw Mailgun multipart body; `EmailAttachmentDto` / `EmailPayloadDto` internal types; `parseMailgunPayload()` mapping function
 - `src/webhooks/dto/mailgun-payload.dto.spec.ts` — unit tests for schema + mapping
 - `src/webhooks/guards/mailgun-auth.guard.ts` — HMAC-SHA256 signature + replay-protection guard
 - `src/webhooks/guards/mailgun-auth.guard.spec.ts` — unit tests for guard
 
 **Modified — logic changes**
+
 - `src/webhooks/webhooks.module.ts` — implement `NestModule`, register multer middleware, swap guard
 - `src/webhooks/webhooks.controller.ts` — read multipart via `@Req()`, validate with `MailgunRawBodySchema`, map to `EmailPayloadDto`
 - `src/webhooks/webhooks.controller.spec.ts` — rewrite for new multipart method signature
@@ -29,11 +31,13 @@
 - `local-test/run.js` — send `multipart/form-data` with HMAC signature
 
 **Modified — import path only (no logic changes)**
+
 - `src/storage/storage.service.ts`
 - `src/ingestion/services/attachment-extractor.service.ts`
 - `src/ingestion/services/spam-filter.service.ts`
 
 **Deleted**
+
 - `src/webhooks/dto/postmark-payload.dto.ts`
 - `src/webhooks/dto/postmark-payload.dto.spec.ts`
 - `src/webhooks/guards/postmark-auth.guard.ts`
@@ -44,6 +48,7 @@
 ## Task 1: MailgunAuthGuard — TDD
 
 **Files:**
+
 - Create: `src/webhooks/guards/mailgun-auth.guard.spec.ts`
 - Create: `src/webhooks/guards/mailgun-auth.guard.ts`
 
@@ -68,7 +73,10 @@ function buildContext(body: Record<string, string> = {}) {
 }
 
 function makeSignature(key: string, timestamp: string, token: string): string {
-  return crypto.createHmac('sha256', key).update(timestamp + token).digest('hex');
+  return crypto
+    .createHmac('sha256', key)
+    .update(timestamp + token)
+    .digest('hex');
 }
 
 function freshTimestamp(): string {
@@ -166,7 +174,10 @@ export class MailgunAuthGuard implements CanActivate {
     }
 
     const signingKey = this.configService.get<string>('MAILGUN_WEBHOOK_SIGNING_KEY') ?? '';
-    const expected = crypto.createHmac('sha256', signingKey).update(timestamp + token).digest('hex');
+    const expected = crypto
+      .createHmac('sha256', signingKey)
+      .update(timestamp + token)
+      .digest('hex');
 
     const sigBuf = Buffer.from(signature, 'hex');
     const expectedBuf = Buffer.from(expected, 'hex');
@@ -200,6 +211,7 @@ git commit -m "feat(webhooks): add MailgunAuthGuard with HMAC-SHA256 + replay pr
 ## Task 2: MailgunPayloadDto — TDD
 
 **Files:**
+
 - Create: `src/webhooks/dto/mailgun-payload.dto.spec.ts`
 - Create: `src/webhooks/dto/mailgun-payload.dto.ts`
 
@@ -257,9 +269,7 @@ describe('MailgunRawBodySchema', () => {
   });
 
   it('rejects invalid JSON in message-headers', () => {
-    expect(
-      MailgunRawBodySchema.safeParse({ ...validBody, 'message-headers': 'not-json' }).success,
-    ).toBe(false);
+    expect(MailgunRawBodySchema.safeParse({ ...validBody, 'message-headers': 'not-json' }).success).toBe(false);
   });
 
   it('defaults subject to empty string when absent', () => {
@@ -384,7 +394,14 @@ export const MailgunRawBodySchema = z.object({
   // Preferred over body-plain for AI extraction — less noise, fewer tokens.
   'stripped-text': z.string().optional(),
   'message-headers': z.string().refine(
-    (val) => { try { JSON.parse(val); return true; } catch { return false; } },
+    (val) => {
+      try {
+        JSON.parse(val);
+        return true;
+      } catch {
+        return false;
+      }
+    },
     { message: 'message-headers must be valid JSON' },
   ),
   recipient: z.string().optional(),
@@ -430,10 +447,7 @@ function extractEmail(from: string): string {
   return match ? match[1] : from;
 }
 
-export function parseMailgunPayload(
-  body: MailgunRawBodyDto,
-  files: Express.Multer.File[],
-): EmailPayloadDto {
+export function parseMailgunPayload(body: MailgunRawBodyDto, files: Express.Multer.File[]): EmailPayloadDto {
   const headers = JSON.parse(body['message-headers']) as [string, string][];
   const msgIdEntry = headers.find(([name]) => name.toLowerCase() === 'message-id');
   // Strip RFC-2822 angle brackets so the value is safe as an R2 key path segment
@@ -486,6 +500,7 @@ git commit -m "feat(webhooks): add MailgunPayloadDto, EmailPayloadDto, parseMail
 ## Task 3: Wire Multer Middleware in WebhooksModule
 
 **Files:**
+
 - Modify: `src/webhooks/webhooks.module.ts`
 
 - [ ] **Step 1: Replace the module file**
@@ -509,7 +524,7 @@ import { StorageModule } from '../storage/storage.module';
 export class WebhooksModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(multer({ storage: multer.memoryStorage() }).any())
+      .apply(multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 5 } }).any())
       .forRoutes({ path: 'webhooks/email', method: RequestMethod.POST });
   }
 }
@@ -535,6 +550,7 @@ git commit -m "feat(webhooks): register multer middleware, swap PostmarkAuthGuar
 ## Task 4: Update WebhooksController + Controller Tests
 
 **Files:**
+
 - Modify: `src/webhooks/webhooks.controller.ts`
 - Modify: `src/webhooks/webhooks.controller.spec.ts`
 
@@ -707,6 +723,7 @@ git commit -m "feat(webhooks): migrate controller to Mailgun multipart + EmailPa
 ## Task 5: Update WebhooksService + Service Tests
 
 **Files:**
+
 - Modify: `src/webhooks/webhooks.service.ts`
 - Modify: `src/webhooks/webhooks.service.spec.ts`
 
@@ -715,6 +732,7 @@ git commit -m "feat(webhooks): migrate controller to Mailgun multipart + EmailPa
 In `src/webhooks/webhooks.service.ts`, make these three targeted changes:
 
 **a) Replace import on line 6:**
+
 ```typescript
 // old:
 import { PostmarkPayloadDto } from './dto/postmark-payload.dto';
@@ -725,6 +743,7 @@ import { EmailPayloadDto } from './dto/mailgun-payload.dto';
 **b) Remove Postmark ping check (lines 29–32) and update method signature:**
 
 Replace:
+
 ```typescript
   async enqueue(payload: PostmarkPayloadDto): Promise<{ status: string }> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
@@ -737,6 +756,7 @@ Replace:
 ```
 
 With:
+
 ```typescript
   async enqueue(payload: EmailPayloadDto): Promise<{ status: string }> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
@@ -746,6 +766,7 @@ With:
 **c) Update `stripAttachmentBlobs` type annotations (lines 132–138):**
 
 Replace:
+
 ```typescript
   private stripAttachmentBlobs(payload: PostmarkPayloadDto): Omit<PostmarkPayloadDto, 'Attachments'> & {
     Attachments: Omit<NonNullable<PostmarkPayloadDto['Attachments']>[number], 'Content'>[];
@@ -753,6 +774,7 @@ Replace:
 ```
 
 With:
+
 ```typescript
   private stripAttachmentBlobs(payload: EmailPayloadDto): Omit<EmailPayloadDto, 'Attachments'> & {
     Attachments: Omit<NonNullable<EmailPayloadDto['Attachments']>[number], 'Content'>[];
@@ -764,6 +786,7 @@ With:
 In `src/webhooks/webhooks.service.spec.ts`, make these changes:
 
 **a) Replace import on line 3:**
+
 ```typescript
 // old:
 import { PostmarkPayloadDto } from './dto/postmark-payload.dto';
@@ -772,6 +795,7 @@ import { EmailPayloadDto } from './dto/mailgun-payload.dto';
 ```
 
 **b) Update type annotation on line 14:**
+
 ```typescript
 // old:
   const basePayload: PostmarkPayloadDto = {
@@ -782,19 +806,20 @@ import { EmailPayloadDto } from './dto/mailgun-payload.dto';
 **c) Delete the entire `describe('skips Postmark test payloads (Ping)')` block (lines 51–62):**
 
 Remove:
+
 ```typescript
-  describe('skips Postmark test payloads (Ping)', () => {
-    it('returns { status: "queued" } without DB or queue activity for MessageID 0-0-0-0-0', async () => {
-      const testPayload = { ...basePayload, MessageID: '00000000-0000-0000-0000-000000000000' };
+describe('skips Postmark test payloads (Ping)', () => {
+  it('returns { status: "queued" } without DB or queue activity for MessageID 0-0-0-0-0', async () => {
+    const testPayload = { ...basePayload, MessageID: '00000000-0000-0000-0000-000000000000' };
 
-      const result = await service.enqueue(testPayload);
+    const result = await service.enqueue(testPayload);
 
-      expect(result).toEqual({ status: 'queued' });
-      expect(mockPrisma.emailIntakeLog.findUnique).not.toHaveBeenCalled();
-      expect(mockPrisma.emailIntakeLog.create).not.toHaveBeenCalled();
-      expect(mockQueue.add).not.toHaveBeenCalled();
-    });
+    expect(result).toEqual({ status: 'queued' });
+    expect(mockPrisma.emailIntakeLog.findUnique).not.toHaveBeenCalled();
+    expect(mockPrisma.emailIntakeLog.create).not.toHaveBeenCalled();
+    expect(mockQueue.add).not.toHaveBeenCalled();
   });
+});
 ```
 
 - [ ] **Step 3: Run the service tests**
@@ -819,6 +844,7 @@ git commit -m "feat(webhooks): use EmailPayloadDto in service, remove Postmark p
 These are mechanical import-path updates — no logic changes.
 
 **Files:**
+
 - Modify: `src/storage/storage.service.ts` (line 4)
 - Modify: `src/ingestion/services/attachment-extractor.service.ts` (line 4)
 - Modify: `src/ingestion/services/spam-filter.service.ts` (line 2)
@@ -826,6 +852,7 @@ These are mechanical import-path updates — no logic changes.
 - [ ] **Step 1: Update storage service import**
 
 In `src/storage/storage.service.ts`, replace line 4:
+
 ```typescript
 // old:
 import { PostmarkAttachmentDto, PostmarkPayloadDto } from '../webhooks/dto/postmark-payload.dto';
@@ -836,6 +863,7 @@ import { PostmarkAttachmentDto, PostmarkPayloadDto } from '../webhooks/dto/mailg
 - [ ] **Step 2: Update attachment-extractor service import**
 
 In `src/ingestion/services/attachment-extractor.service.ts`, replace line 4:
+
 ```typescript
 // old:
 import { PostmarkAttachmentDto } from '../../webhooks/dto/postmark-payload.dto';
@@ -846,6 +874,7 @@ import { PostmarkAttachmentDto } from '../../webhooks/dto/mailgun-payload.dto';
 - [ ] **Step 3: Update spam-filter service import**
 
 In `src/ingestion/services/spam-filter.service.ts`, replace line 2:
+
 ```typescript
 // old:
 import { PostmarkPayloadDto } from '../../webhooks/dto/postmark-payload.dto';
@@ -875,6 +904,7 @@ git commit -m "chore(webhooks): update import paths postmark-payload.dto → mai
 ## Task 7: Delete Old Postmark Files
 
 **Files:**
+
 - Delete: `src/webhooks/dto/postmark-payload.dto.ts`
 - Delete: `src/webhooks/dto/postmark-payload.dto.spec.ts`
 - Delete: `src/webhooks/guards/postmark-auth.guard.ts`
@@ -909,15 +939,17 @@ git commit -m "chore(webhooks): delete Postmark DTO, guard, and their tests"
 ## Task 8: Remove 10 MB JSON Body Limit from main.ts
 
 **Files:**
+
 - Modify: `src/main.ts`
 
 - [ ] **Step 1: Remove the body-parser override**
 
 In `src/main.ts`, delete lines 27–29:
+
 ```typescript
-  // Postmark sends CV attachments as base64 inside JSON — a 2 MB PDF becomes ~2.7 MB.
-  // Default Express limit is 100 KB which rejects most real CVs.
-  app.useBodyParser('json', { limit: '10mb' });
+// Postmark sends CV attachments as base64 inside JSON — a 2 MB PDF becomes ~2.7 MB.
+// Default Express limit is 100 KB which rejects most real CVs.
+app.useBodyParser('json', { limit: '10mb' });
 ```
 
 - [ ] **Step 2: Run the full test suite**
@@ -940,6 +972,7 @@ git commit -m "chore(main): remove 10 MB JSON limit now that attachments arrive 
 ## Task 9: Update .env.example
 
 **Files:**
+
 - Modify: `.env.example`
 
 - [ ] **Step 1: Update env vars**
@@ -947,18 +980,21 @@ git commit -m "chore(main): remove 10 MB JSON limit now that attachments arrive 
 In `.env.example`:
 
 Replace:
+
 ```
 # Email intake — Postmark HMAC-SHA256 signature verification token
 POSTMARK_WEBHOOK_TOKEN=...
 ```
 
 With:
+
 ```
 # Email intake — Mailgun webhook signing key (Mailgun dashboard → Webhooks → HTTP webhook signing key)
 MAILGUN_WEBHOOK_SIGNING_KEY=
 ```
 
 Replace the SMTP block:
+
 ```
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
@@ -968,6 +1004,7 @@ SMTP_FROM="Talent OS <noreply@talentos.triolla.io>"
 ```
 
 With:
+
 ```
 SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
@@ -977,6 +1014,7 @@ SMTP_FROM="Talent OS <noreply@mg.triolla.io>"
 ```
 
 Also remove the Directus variables block (they were removed from the compose file):
+
 ```
 # ─── Directus Admin UI ────────────────────────────────────────────────────────
 # Generate SECRET with: openssl rand -base64 32
@@ -997,6 +1035,7 @@ git commit -m "chore(env): swap Postmark → Mailgun env vars, update SMTP to Ma
 ## Task 10: Update local-test/run.js for Mailgun Format
 
 **Files:**
+
 - Modify: `local-test/run.js`
 
 - [ ] **Step 1: Replace local-test/run.js**
@@ -1038,7 +1077,10 @@ const SENDER_EMAIL = 'agency@test-recruiter.com';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildMailgunSignature(signingKey, timestamp, token) {
-  return crypto.createHmac('sha256', signingKey).update(timestamp + token).digest('hex');
+  return crypto
+    .createHmac('sha256', signingKey)
+    .update(timestamp + token)
+    .digest('hex');
 }
 
 function randomToken() {
@@ -1201,6 +1243,7 @@ node -e "require('form-data')" 2>&1
 ```
 
 If the module is missing, run:
+
 ```bash
 npm install --save-dev form-data
 ```
@@ -1247,6 +1290,7 @@ ls src/webhooks/dto/ src/webhooks/guards/
 ```
 
 Expected output:
+
 ```
 src/webhooks/dto/:
 mailgun-payload.dto.spec.ts  mailgun-payload.dto.ts
