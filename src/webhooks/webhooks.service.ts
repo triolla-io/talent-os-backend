@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
-import { PostmarkPayloadDto } from './dto/postmark-payload.dto';
+import { EmailPayloadDto } from './dto/mailgun-payload.dto';
 import { StorageService } from '../storage/storage.service';
 
 export interface IngestJobData {
@@ -22,14 +22,9 @@ export class WebhooksService {
     private readonly storageService: StorageService,
   ) {}
 
-  async enqueue(payload: PostmarkPayloadDto): Promise<{ status: string }> {
+  async enqueue(payload: EmailPayloadDto): Promise<{ status: string }> {
     const tenantId = this.configService.get<string>('TENANT_ID')!;
     const messageId = payload.MessageID;
-
-    if (messageId === '00000000-0000-0000-0000-000000000000') {
-      this.logger.log('Skipping Postmark test payload (Ping)');
-      return { status: 'queued' };
-    }
 
     const existing = await this.prisma.emailIntakeLog.findUnique({
       where: { idx_intake_message_id: { tenantId, messageId } },
@@ -129,8 +124,8 @@ export class WebhooksService {
     return { status: overallStatus, db: dbStatus, redis: redisStatus };
   }
 
-  private stripAttachmentBlobs(payload: PostmarkPayloadDto): Omit<PostmarkPayloadDto, 'Attachments'> & {
-    Attachments: Omit<NonNullable<PostmarkPayloadDto['Attachments']>[number], 'Content'>[];
+  private stripAttachmentBlobs(payload: EmailPayloadDto): Omit<EmailPayloadDto, 'Attachments'> & {
+    Attachments: Omit<NonNullable<EmailPayloadDto['Attachments']>[number], 'Content'>[];
   } {
     return {
       ...payload,

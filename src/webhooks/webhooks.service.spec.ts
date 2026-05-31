@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { WebhooksService } from './webhooks.service';
-import { PostmarkPayloadDto } from './dto/postmark-payload.dto';
+import { EmailPayloadDto } from './dto/mailgun-payload.dto';
 
 describe('WebhooksService', () => {
   let service: WebhooksService;
@@ -11,7 +11,7 @@ describe('WebhooksService', () => {
 
   const tenantId = '00000000-0000-0000-0000-000000000001';
 
-  const basePayload: PostmarkPayloadDto = {
+  const basePayload: EmailPayloadDto = {
     MessageID: 'msg-abc-123',
     From: 'candidate@example.com',
     Subject: 'My Application',
@@ -46,19 +46,6 @@ describe('WebhooksService', () => {
       mockConfigService as ConfigService,
       mockStorageService,
     );
-  });
-
-  describe('skips Postmark test payloads (Ping)', () => {
-    it('returns { status: "queued" } without DB or queue activity for MessageID 0-0-0-0-0', async () => {
-      const testPayload = { ...basePayload, MessageID: '00000000-0000-0000-0000-000000000000' };
-
-      const result = await service.enqueue(testPayload);
-
-      expect(result).toEqual({ status: 'queued' });
-      expect(mockPrisma.emailIntakeLog.findUnique).not.toHaveBeenCalled();
-      expect(mockPrisma.emailIntakeLog.create).not.toHaveBeenCalled();
-      expect(mockQueue.add).not.toHaveBeenCalled();
-    });
   });
 
   describe('inserts intake_log before enqueue on first receipt', () => {
@@ -223,7 +210,7 @@ describe('WebhooksService', () => {
       mockPrisma.emailIntakeLog.findUnique.mockResolvedValue(null);
       mockPrisma.emailIntakeLog.create.mockResolvedValue({ id: 'log-1' });
 
-      const payloadWithAttachment: PostmarkPayloadDto = {
+      const payloadWithAttachment: EmailPayloadDto = {
         ...basePayload,
         Attachments: [
           {
