@@ -1,30 +1,30 @@
-import { BadRequestException, Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Get, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { Request } from 'express';
 import { WebhooksService } from './webhooks.service';
-import { PostmarkPayloadDto, PostmarkPayloadSchema } from './dto/postmark-payload.dto';
-import { PostmarkAuthGuard } from './guards/postmark-auth.guard';
+import { MailgunRawBodySchema, parseMailgunPayload } from './dto/mailgun-payload.dto';
+import { MailgunAuthGuard } from './guards/mailgun-auth.guard';
 
 @Controller('webhooks')
 export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
 
-  @UseGuards(PostmarkAuthGuard, ThrottlerGuard)
+  @UseGuards(MailgunAuthGuard, ThrottlerGuard)
   @Post('email')
   @HttpCode(HttpStatus.OK)
-  async ingestEmail(@Body() rawBody: unknown): Promise<{ status: string }> {
-    // Parse and validate payload with Zod — return structured error on invalid payload
-    const result = PostmarkPayloadSchema.safeParse(rawBody);
+  async ingestEmail(@Req() req: Request): Promise<{ status: string }> {
+    const result = MailgunRawBodySchema.safeParse(req.body);
     if (!result.success) {
       throw new BadRequestException({
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'Invalid Postmark payload',
+          message: 'Invalid Mailgun payload',
           details: result.error.flatten().fieldErrors,
         },
       });
     }
-    const payload = result.data as PostmarkPayloadDto;
-    return this.webhooksService.enqueue(payload);
+    const normalized = parseMailgunPayload(result.data, (req.files ?? []) as Express.Multer.File[]);
+    return this.webhooksService.enqueue(normalized);
   }
 
   @Get('health')
