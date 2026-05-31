@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Local manual test runner for the Telent-OS email intake flow.
+ * Local manual test runner for the Talent-OS email intake flow.
  *
  * Usage:
  *   node local-test/run.js                     # send all files in local-test/files/
@@ -10,8 +10,9 @@
  * Prerequisites:
  *   - docker compose up --build (API on port 3000)
  *   - docker compose exec api npx prisma db seed  (tenant + job must exist)
+ *   - MAILGUN_WEBHOOK_SIGNING_KEY set in .env (or exported in your shell)
  *
- * After running, open Prisma Studio (http://localhost:5555 or whatever port) and check:
+ * After running, open Prisma Studio and check:
  *   1. email_intake_log  → processing_status should go pending → success
  *   2. candidates        → extracted fields from the CV
  *   3. applications      → linked to the job
@@ -20,17 +21,25 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const FormData = require('form-data');
 
-// ─── Config (mirrors .env for the dev stack) ──────────────────────────────────
+// ─── Config ──────────────────────────────────────────────────────────────────
 const API_BASE_URL = 'http://localhost:3000';
-const POSTMARK_TOKEN = 'my-super-secret-123'; // same as .env POSTMARK_WEBHOOK_TOKEN
+const SIGNING_KEY = process.env.MAILGUN_WEBHOOK_SIGNING_KEY ?? 'dev-signing-key-change-me';
 const SENDER_EMAIL = 'agency@test-recruiter.com';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildAuthHeader(token) {
-  // Postmark HTTP Basic Auth: username is anything, password is the token
-  return 'Basic ' + Buffer.from(`postmark:${token}`).toString('base64');
+function buildMailgunSignature(signingKey, timestamp, token) {
+  return crypto
+    .createHmac('sha256', signingKey)
+    .update(timestamp + token)
+    .digest('hex');
+}
+
+function randomToken() {
+  return crypto.randomBytes(25).toString('hex'); // 50 hex chars
 }
 
 function getContentType(filename) {
@@ -43,33 +52,17 @@ function getContentType(filename) {
   return map[ext] ?? 'application/octet-stream';
 }
 
-function buildPayload(filename, fileBuffer) {
-  const contentType = getContentType(filename);
-  const base64Content = fileBuffer.toString('base64');
-  const candidateName = path.basename(filename, path.extname(filename)).replace(/[-_]/g, ' ');
-
-  return {
-    // Postmark sends just the email address in 'From' (name goes in 'FromFull' which we don't use)
-    MessageID: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    From: SENDER_EMAIL,
-    Subject: `CV - ${candidateName}`,
-    Date: new Date().toISOString(),
-    TextBody: `Hi,\n\nPlease find my CV attached.\n\nBest regards,\n${candidateName}`,
-    HtmlBody: `<p>Please find my CV attached.</p>`,
-    Attachments: [
-      {
-        Name: filename,
-        ContentType: contentType,
-        ContentLength: fileBuffer.length,
-        Content: base64Content,
-      },
-    ],
-  };
+function buildMessageHeaders(messageId) {
+  return JSON.stringify([
+    ['Message-Id', `<${messageId}>`],
+    ['From', SENDER_EMAIL],
+    ['Mime-Version', '1.0'],
+  ]);
 }
 
 async function checkHealth() {
   console.log('\n🏥  Checking system health...');
-  const res = await fetch(`${API_BASE_URL}/webhooks/health`);
+  const res = await fetch(`${API_BASE_URL}/api/webhooks/health`);
   const body = await res.json();
   if (res.ok) {
     console.log(`✅  Health OK →`, body);
@@ -80,20 +73,33 @@ async function checkHealth() {
 }
 
 async function sendWebhook(filename, fileBuffer) {
-  const payload = buildPayload(filename, fileBuffer);
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const token = randomToken();
+  const signature = buildMailgunSignature(SIGNING_KEY, timestamp, token);
+  const messageId = `test-${Date.now()}-${token.slice(0, 8)}@local.test`;
+  const candidateName = path.basename(filename, path.extname(filename)).replace(/[-_]/g, ' ');
+  const contentType = getContentType(filename);
 
   console.log(`\n📤  Sending: ${filename}`);
-  console.log(`    MessageID : ${payload.MessageID}`);
-  console.log(`    From      : ${payload.From}`);
+  console.log(`    MessageID : ${messageId}`);
+  console.log(`    From      : ${SENDER_EMAIL}`);
   console.log(`    Size      : ${(fileBuffer.length / 1024).toFixed(1)} KB`);
 
-  const res = await fetch(`${API_BASE_URL}/webhooks/email`, {
+  const form = new FormData();
+  form.append('timestamp', timestamp);
+  form.append('token', token);
+  form.append('signature', signature);
+  form.append('from', SENDER_EMAIL);
+  form.append('recipient', 'fun@mg.triolla.io');
+  form.append('subject', `CV - ${candidateName}`);
+  form.append('body-plain', `Hi,\n\nPlease find my CV attached.\n\nBest regards,\n${candidateName}`);
+  form.append('message-headers', buildMessageHeaders(messageId));
+  form.append('attachment-1', fileBuffer, { filename, contentType });
+
+  const res = await fetch(`${API_BASE_URL}/api/webhooks/email`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: buildAuthHeader(POSTMARK_TOKEN),
-    },
-    body: JSON.stringify(payload),
+    headers: form.getHeaders(),
+    body: form,
   });
 
   const responseText = await res.text();
@@ -102,12 +108,12 @@ async function sendWebhook(filename, fileBuffer) {
     console.log(`✅  Accepted [${res.status}] → ${responseText}`);
     console.log(`\n    👉 Now watch docker compose logs -f worker for processing.`);
     console.log(`    👉 Then refresh Prisma Studio → email_intake_log to see the result.`);
-    console.log(`    👉 MessageID to search for: ${payload.MessageID}`);
+    console.log(`    👉 MessageID to search for: ${messageId}`);
   } else {
     console.error(`❌  Rejected [${res.status}] → ${responseText}`);
   }
 
-  return { ok: res.ok, messageId: payload.MessageID };
+  return { ok: res.ok, messageId };
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -116,24 +122,20 @@ async function main() {
   const args = process.argv.slice(2);
   const filesDir = path.join(__dirname, 'files');
 
-  // Health-only mode
   if (args.includes('--health')) {
     await checkHealth();
     return;
   }
 
-  // Always run health check first
   const healthy = await checkHealth();
   if (!healthy) {
     console.error('\n⛔  Service degraded — fix health issues before running tests.');
     process.exit(1);
   }
 
-  // Determine which files to send
   let filesToSend = [];
 
   if (args.length > 0 && !args[0].startsWith('--')) {
-    // Specific file passed as argument
     const targetFile = path.join(filesDir, args[0]);
     if (!fs.existsSync(targetFile)) {
       console.error(`❌  File not found: ${targetFile}`);
@@ -141,7 +143,6 @@ async function main() {
     }
     filesToSend = [args[0]];
   } else {
-    // Scan local-test/files/ for all CV files
     if (!fs.existsSync(filesDir)) {
       console.error(`❌  Directory not found: ${filesDir}`);
       console.error(`    Create it and place CV files inside (PDF, DOC, DOCX).`);
@@ -168,21 +169,18 @@ async function main() {
     const fileBuffer = fs.readFileSync(filePath);
     const result = await sendWebhook(filename, fileBuffer);
     results.push({ filename, ...result });
-    // Small delay between sends to keep logs readable
     if (filesToSend.indexOf(filename) < filesToSend.length - 1) {
       await new Promise((r) => setTimeout(r, 1500));
     }
   }
 
-  // Summary
   console.log('\n─────────────────────────────────────────────');
   console.log('📊 Summary:');
   results.forEach(({ filename, ok, messageId }) => {
     const icon = ok ? '✅' : '❌';
     console.log(`  ${icon}  ${filename.padEnd(40)} MessageID: ${messageId}`);
   });
-  console.log('─────────────────────────────────────────────');
-  console.log('');
+  console.log('─────────────────────────────────────────────\n');
 }
 
 main().catch((err) => {
