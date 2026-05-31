@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PostmarkPayloadDto } from '../../webhooks/dto/postmark-payload.dto';
+import { PostmarkPayloadDto } from '../../webhooks/dto/mailgun-payload.dto';
 
 export interface SpamFilterResult {
   isSpam: boolean;

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
-import { PostmarkAttachmentDto } from '../../webhooks/dto/postmark-payload.dto';
+import { PostmarkAttachmentDto } from '../../webhooks/dto/mailgun-payload.dto';
 
 const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';

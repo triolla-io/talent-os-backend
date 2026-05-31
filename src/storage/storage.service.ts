@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { PostmarkAttachmentDto, PostmarkPayloadDto } from '../webhooks/dto/postmark-payload.dto';
+import { PostmarkAttachmentDto, PostmarkPayloadDto } from '../webhooks/dto/mailgun-payload.dto';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const CV_MIME_TYPES = [
