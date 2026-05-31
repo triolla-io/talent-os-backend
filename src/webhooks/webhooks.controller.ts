@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Post, Get, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { WebhooksService } from './webhooks.service';
 import { MailgunRawBodySchema, parseMailgunPayload } from './dto/mailgun-payload.dto';
 import { MailgunAuthGuard } from './guards/mailgun-auth.guard';

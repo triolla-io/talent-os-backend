@@ -1,5 +1,5 @@
 import { SpamFilterService, SpamFilterResult } from './spam-filter.service';
-import { PostmarkPayloadDto } from '../../webhooks/dto/postmark-payload.dto';
+import { PostmarkPayloadDto } from '../../webhooks/dto/mailgun-payload.dto';
 
 export function mockPostmarkPayload(overrides: Partial<PostmarkPayloadDto> = {}): PostmarkPayloadDto {
   return {

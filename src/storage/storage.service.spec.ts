@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { StorageService } from './storage.service';
-import { PostmarkAttachmentDto } from '../webhooks/dto/postmark-payload.dto';
+import { PostmarkAttachmentDto } from '../webhooks/dto/mailgun-payload.dto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const mockS3Send = jest.fn();

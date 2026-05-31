@@ -13,7 +13,7 @@ jest.mock('mammoth', () => ({
 }));
 
 import { AttachmentExtractorService } from './attachment-extractor.service';
-import { PostmarkAttachmentDto } from '../../webhooks/dto/postmark-payload.dto';
+import { PostmarkAttachmentDto } from '../../webhooks/dto/mailgun-payload.dto';
 import { mockBase64Pdf, mockBase64Docx } from './spam-filter.service.spec';
 
 describe('AttachmentExtractorService', () => {

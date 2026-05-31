@@ -1,6 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import * as multer from 'multer';
+import multer from 'multer';
 import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 import { MailgunAuthGuard } from './guards/mailgun-auth.guard';

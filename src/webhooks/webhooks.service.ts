@@ -49,7 +49,7 @@ export class WebhooksService {
     }
 
     // Upload full payload JSON to R2 BEFORE inserting DB row.
-    // If R2 upload fails → return 5xx → Postmark retries → no orphaned DB row created.
+    // If R2 upload fails → return 5xx → Mailgun retries → no orphaned DB row created.
     const rawPayloadKey = await this.storageService.uploadPayload(payload, tenantId, messageId);
 
     // Upload CV attachment to R2 (moved from worker Phase 5 — fixes M3 orphan risk).
