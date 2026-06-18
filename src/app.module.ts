@@ -12,6 +12,7 @@ import { ApplicationsModule } from './applications/applications.module';
 import { AppConfigModule } from './config/app-config/app-config.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
+import { PmBridgeModule } from './pm-bridge/pm-bridge.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { AuthModule } from './auth/auth.module';
     AppConfigModule,
     HealthModule,
     AuthModule,
+    PmBridgeModule,
   ],
 })
 export class AppModule {}

@@ -13,6 +13,9 @@ const validEnv = {
   R2_BUCKET_NAME: 'triolla-cvs',
   NODE_ENV: 'test' as const,
   JWT_SECRET: 'test-jwt-secret-for-unit-tests-minimum-32chars',
+  JIRA_BASE_URL: 'https://example.atlassian.net',
+  JIRA_EMAIL: 'test@example.com',
+  JIRA_API_TOKEN: 'jira-token',
 };
 
 describe('envSchema', () => {

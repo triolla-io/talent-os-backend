@@ -23,6 +23,14 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   EXTRACTION_MODEL: z.string().default('openai/gpt-4o-mini'),
   SCORING_MODEL: z.string().default('openai/gpt-4o-mini'),
+  // PM Bridge — Jira integration
+  JIRA_BASE_URL: z.url(),
+  JIRA_EMAIL: z.string().min(1),
+  JIRA_API_TOKEN: z.string().min(1),
+  JIRA_PROJECT_KEY: z.string().default('TO'),
+  JIRA_SPRINT_ID: z.coerce.number().int().positive().optional(),
+  PM_BRIDGE_ALLOWLIST: z.string().default(''),
+  PM_BRIDGE_MODEL: z.string().default('anthropic/claude-sonnet-4.6'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -35,6 +35,9 @@ model Organization {
   invitations Invitation[]
   createdBy   User?        @relation("OrgCreator", fields: [createdByUserId], references: [id])
 
+  // Relations — pm-bridge
+  pmProductDecisions PmProductDecision[]
+
   @@map("tenants")
 }
 
@@ -319,6 +322,25 @@ model ScreeningQuestion {
 
   @@index([jobId], name: "idx_screening_questions_job")
   @@map("screening_questions")
+}
+
+// ─── pm_product_decisions ─────────────────────────────────────────────────────
+// status CHECK constraint ('active','superseded') is added via raw SQL in the migration
+model PmProductDecision {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  statement    String   @db.Text
+  contextRoute String?  @map("context_route") @db.Text
+  createdBy    String   @map("created_by") @db.Text
+  status       String   @default("active") @db.Text
+  supersededBy String?  @map("superseded_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status], name: "idx_pm_decisions_tenant_status")
+  @@map("pm_product_decisions")
 }
 
 // ─── candidate_stage_summaries ────────────────────────────────────────────────

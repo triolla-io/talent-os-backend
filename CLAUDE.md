@@ -80,6 +80,15 @@ R2_ACCOUNT_ID          # Cloudflare R2
 R2_ACCESS_KEY_ID
 R2_SECRET_ACCESS_KEY
 R2_BUCKET_NAME
+
+# PM Bridge — Jira integration
+JIRA_BASE_URL          # https://triolla.atlassian.net
+JIRA_EMAIL             # Atlassian account email for Basic auth
+JIRA_API_TOKEN         # Atlassian API token (never logged)
+JIRA_PROJECT_KEY       # default: TO
+JIRA_SPRINT_ID         # optional numeric sprint ID — new issues are auto-added to this sprint
+PM_BRIDGE_ALLOWLIST    # comma-separated emails allowed to use PM Bridge (default: empty = no one)
+PM_BRIDGE_MODEL        # OpenRouter model for draft+validate (default: anthropic/claude-sonnet-4.6)
 ```
 
 <!-- GSD:workflow-start source:GSD defaults -->
