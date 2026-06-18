@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { envSchema } from './config/env';
+import { apiEnvSchema } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { CandidatesModule } from './candidates/candidates.module';
@@ -18,7 +18,7 @@ import { PmBridgeModule } from './pm-bridge/pm-bridge.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      validate: (config) => envSchema.parse(config),
+      validate: (config) => apiEnvSchema.parse(config),
     }),
     LoggerModule.forRoot({
       pinoHttp: {

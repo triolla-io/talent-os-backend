@@ -1,4 +1,4 @@
-import { envSchema } from './env';
+import { apiEnvSchema, envSchema } from './env';
 
 const validEnv = {
   DATABASE_URL: 'postgresql://triolla:password@localhost:5432/triolla',
@@ -44,5 +44,22 @@ describe('envSchema', () => {
     const { NODE_ENV, ...rest } = validEnv;
     const result = envSchema.parse(rest);
     expect(result.NODE_ENV).toBe('production');
+  });
+
+  // The BullMQ worker validates against the base envSchema and never calls Jira, so it must
+  // boot without Jira credentials — otherwise a separate worker deployment crashes on startup.
+  it('worker schema (envSchema) parses without Jira credentials', () => {
+    const { JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, ...noJira } = validEnv;
+    expect(() => envSchema.parse(noJira)).not.toThrow();
+  });
+
+  // The API runs PM Bridge, so its schema must require Jira credentials (fail fast at startup).
+  it('api schema (apiEnvSchema) parses a valid environment object', () => {
+    expect(() => apiEnvSchema.parse(validEnv)).not.toThrow();
+  });
+
+  it('api schema (apiEnvSchema) throws when Jira credentials are missing', () => {
+    const { JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, ...noJira } = validEnv;
+    expect(() => apiEnvSchema.parse(noJira)).toThrow();
   });
 });

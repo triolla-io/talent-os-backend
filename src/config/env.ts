@@ -23,10 +23,12 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   EXTRACTION_MODEL: z.string().default('openai/gpt-4o-mini'),
   SCORING_MODEL: z.string().default('openai/gpt-4o-mini'),
-  // PM Bridge — Jira integration
-  JIRA_BASE_URL: z.url(),
-  JIRA_EMAIL: z.string().min(1),
-  JIRA_API_TOKEN: z.string().min(1),
+  // PM Bridge — Jira integration.
+  // Optional in this shared/base schema so the BullMQ worker (which never calls Jira) can boot
+  // without these. The API process re-requires JIRA_BASE_URL/EMAIL/API_TOKEN via apiEnvSchema.
+  JIRA_BASE_URL: z.url().optional(),
+  JIRA_EMAIL: z.string().min(1).optional(),
+  JIRA_API_TOKEN: z.string().min(1).optional(),
   JIRA_PROJECT_KEY: z.string().default('TO'),
   JIRA_SPRINT_ID: z.coerce.number().int().positive().optional(),
   PM_BRIDGE_ALLOWLIST: z.string().default(''),
@@ -34,3 +36,14 @@ export const envSchema = z.object({
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+// API-process schema. PM Bridge runs only in the API, so Jira credentials are required there:
+// the API fails fast at startup if they're missing. The worker validates against the base
+// envSchema above and therefore boots without any Jira configuration.
+export const apiEnvSchema = envSchema.extend({
+  JIRA_BASE_URL: z.url(),
+  JIRA_EMAIL: z.string().min(1),
+  JIRA_API_TOKEN: z.string().min(1),
+});
+
+export type ApiEnv = z.infer<typeof apiEnvSchema>;
