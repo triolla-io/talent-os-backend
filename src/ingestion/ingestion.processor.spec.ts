@@ -6,6 +6,7 @@ import { AttachmentExtractorService } from './services/attachment-extractor.serv
 import { PrismaService } from '../prisma/prisma.service';
 import { mockPostmarkPayload } from './services/spam-filter.service.spec';
 import { ExtractionAgentService } from './services/extraction-agent.service';
+import { CvClassifierService } from './services/cv-classifier.service';
 import { mockCandidateExtract } from './services/extraction-agent.service.test-helpers';
 import { StorageService } from '../storage/storage.service';
 import { DedupService } from '../dedup/dedup.service';
@@ -80,6 +81,7 @@ describe('IngestionProcessor', () => {
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, reasoning: '', strengths: [], gaps: [], modelUsed: 'test' }) } },
+        { provide: CvClassifierService, useValue: { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'test cv' }) } },
         { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
       ],
     }).compile();
@@ -264,6 +266,7 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, reasoning: '', strengths: [], gaps: [], modelUsed: 'test' }) } },
+        { provide: CvClassifierService, useValue: { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'test cv' }) } },
         { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
       ],
     }).compile();
@@ -421,6 +424,7 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, reasoning: '', strengths: [], gaps: [], modelUsed: 'test' }) } },
+        { provide: CvClassifierService, useValue: { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'test cv' }) } },
         { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
       ],
     }).compile();
@@ -664,6 +668,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: scoringService },
+        { provide: CvClassifierService, useValue: { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'test cv' }) } },
         { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
       ],
     }).compile();
@@ -880,7 +885,8 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
           { provide: StorageService, useValue: storageService },
           { provide: DedupService, useValue: { check: jest.fn().mockResolvedValue(null), insertCandidate: jest.fn().mockResolvedValue('cand-1') } },
           { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 72, modelUsed: 'test', reasoning: '', strengths: [], gaps: [] }) } },
-          { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
+          { provide: CvClassifierService, useValue: { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'test cv' }) } },
+        { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
         ],
       }).compile();
       processor = module.get<IngestionProcessor>(IngestionProcessor);
@@ -1030,6 +1036,7 @@ describe('IngestionProcessor — extractCandidateShortIds()', () => {
         { provide: StorageService, useValue: { upload: jest.fn().mockResolvedValue('key'), downloadPayload: jest.fn() } },
         { provide: DedupService, useValue: { check: jest.fn().mockResolvedValue(null), insertCandidate: jest.fn().mockResolvedValue('cand-1') } },
         { provide: ScoringAgentService, useValue: { score: jest.fn() } },
+        { provide: CvClassifierService, useValue: { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'test cv' }) } },
         { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
       ],
     }).compile();
@@ -1119,6 +1126,7 @@ describe('IngestionProcessor — Phase 6 idempotency guard', () => {
         { provide: StorageService, useValue: storageService },
         { provide: DedupService, useValue: dedupService },
         { provide: ScoringAgentService, useValue: { score: jest.fn() } },
+        { provide: CvClassifierService, useValue: { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'test cv' }) } },
         { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
       ],
     }).compile();
@@ -1157,5 +1165,130 @@ describe('IngestionProcessor — Phase 6 idempotency guard', () => {
     await processor.process(job);
 
     expect(dedupService.insertCandidate).not.toHaveBeenCalled();
+  });
+});
+
+describe('IngestionProcessor — CV Classification Gate', () => {
+  let processor: IngestionProcessor;
+  let prisma: any;
+  let extractionAgent: { extract: jest.Mock };
+  let dedupService: any;
+  let cvClassifier: { classify: jest.Mock };
+  let storageService: { upload: jest.Mock; downloadPayload: jest.Mock };
+
+  const cvPayload = () =>
+    mockPostmarkPayload({
+      MessageID: 'msg-gate-test',
+      From: 'candidate@example.com',
+      Subject: 'Application for Backend Developer',
+      TextBody:
+        'Dear Hiring Manager, please find my CV attached. I have 5 years of experience in software engineering and would love to apply.',
+      Attachments: [],
+    });
+
+  beforeEach(async () => {
+    const txClient = {
+      emailIntakeLog: { update: jest.fn().mockResolvedValue({}) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(0),
+    };
+    prisma = {
+      emailIntakeLog: {
+        update: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }),
+      },
+      $transaction: jest.fn().mockImplementation(async (cb: any) => cb(txClient)),
+      candidate: { update: jest.fn().mockResolvedValue({}) },
+      job: { findMany: jest.fn().mockResolvedValue([]) },
+      application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id' }) },
+      candidateJobScore: { create: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({}) },
+    };
+    extractionAgent = { extract: jest.fn().mockResolvedValue(mockCandidateExtract()) };
+    dedupService = {
+      check: jest.fn().mockResolvedValue(null),
+      insertCandidate: jest.fn().mockResolvedValue('new-candidate-id'),
+      upsertCandidate: jest.fn().mockResolvedValue(undefined),
+      createFlag: jest.fn().mockResolvedValue(undefined),
+    };
+    cvClassifier = { classify: jest.fn().mockResolvedValue({ verdict: 'cv', reason: 'resume' }) };
+    storageService = { upload: jest.fn(), downloadPayload: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        IngestionProcessor,
+        SpamFilterService,
+        AttachmentExtractorService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ExtractionAgentService, useValue: extractionAgent },
+        { provide: StorageService, useValue: storageService },
+        { provide: DedupService, useValue: dedupService },
+        {
+          provide: ScoringAgentService,
+          useValue: { score: jest.fn().mockResolvedValue({ score: 72, reasoning: '', strengths: [], gaps: [], modelUsed: 'test' }) },
+        },
+        { provide: CvClassifierService, useValue: cvClassifier },
+        { provide: PinoLogger, useValue: { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() } },
+      ],
+    }).compile();
+    processor = module.get<IngestionProcessor>(IngestionProcessor);
+  });
+
+  afterEach(() => jest.clearAllMocks());
+
+  it('verdict "cv" → extraction + candidate creation run; status ends completed', async () => {
+    cvClassifier.classify.mockResolvedValue({ verdict: 'cv', reason: 'resume' });
+    const payload = cvPayload();
+    storageService.downloadPayload.mockResolvedValue(payload);
+
+    await processor.process(makeJob('gate-cv', payload));
+
+    expect(cvClassifier.classify).toHaveBeenCalledTimes(1);
+    expect(extractionAgent.extract).toHaveBeenCalledTimes(1);
+    expect(dedupService.insertCandidate).toHaveBeenCalledTimes(1);
+    expect(prisma.emailIntakeLog.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { processingStatus: 'completed' } }),
+    );
+  });
+
+  it('verdict "not_cv" → no extraction, no candidate, status not_cv', async () => {
+    cvClassifier.classify.mockResolvedValue({ verdict: 'not_cv', reason: 'invoice PDF' });
+    const payload = cvPayload();
+    storageService.downloadPayload.mockResolvedValue(payload);
+
+    await processor.process(makeJob('gate-notcv', payload));
+
+    expect(extractionAgent.extract).not.toHaveBeenCalled();
+    expect(dedupService.insertCandidate).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.emailIntakeLog.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { processingStatus: 'not_cv' } }),
+    );
+  });
+
+  it('verdict "uncertain" → no extraction, no candidate, status needs_review', async () => {
+    cvClassifier.classify.mockResolvedValue({ verdict: 'uncertain', reason: 'no job context' });
+    const payload = cvPayload();
+    storageService.downloadPayload.mockResolvedValue(payload);
+
+    await processor.process(makeJob('gate-uncertain', payload));
+
+    expect(extractionAgent.extract).not.toHaveBeenCalled();
+    expect(dedupService.insertCandidate).not.toHaveBeenCalled();
+    expect(prisma.emailIntakeLog.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { processingStatus: 'needs_review' } }),
+    );
+  });
+
+  it('spam short-circuits BEFORE the classifier runs', async () => {
+    // No meaningful attachment + body < 100 chars → spam filter hard-rejects (unchanged behavior)
+    const spamPayload = mockPostmarkPayload({ MessageID: 'msg-gate-spam', TextBody: 'hi', Attachments: [] });
+    storageService.downloadPayload.mockResolvedValue(spamPayload);
+
+    await processor.process(makeJob('gate-spam', spamPayload));
+
+    expect(cvClassifier.classify).not.toHaveBeenCalled();
+    expect(prisma.emailIntakeLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { processingStatus: 'spam' } }),
+    );
   });
 });

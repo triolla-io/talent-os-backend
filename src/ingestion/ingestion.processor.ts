@@ -5,7 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IngestJobData } from '../webhooks/webhooks.service';
 import { SpamFilterService } from './services/spam-filter.service';
 import { AttachmentExtractorService } from './services/attachment-extractor.service';
-import { ExtractionAgentService, CandidateExtract } from './services/extraction-agent.service';
+import { ExtractionAgentService, CandidateExtract, resolveAgencyFromEmail } from './services/extraction-agent.service';
+import { CvClassifierService, CvClassification } from './services/cv-classifier.service';
 import { StorageService } from '../storage/storage.service';
 import { DedupService, DedupResult } from '../dedup/dedup.service';
 import { ScoringAgentService, ScoringInput } from '../scoring/scoring.service';
@@ -26,6 +27,7 @@ export interface ProcessingContext {
 export class IngestionProcessor extends WorkerHost {
   constructor(
     private readonly spamFilter: SpamFilterService,
+    private readonly cvClassifier: CvClassifierService,
     private readonly attachmentExtractor: AttachmentExtractorService,
     private readonly prisma: PrismaService,
     private readonly extractionAgent: ExtractionAgentService,
@@ -104,6 +106,65 @@ export class IngestionProcessor extends WorkerHost {
     const bodySection = payload.TextBody?.trim() ? `--- Email Body ---\n${payload.TextBody.trim()}` : '';
 
     const fullText = [bodySection, attachmentText].filter(Boolean).join('\n\n');
+
+    // CV CLASSIFICATION GATE — decide whether this email is a job application
+    // BEFORE any candidate is created. Runs after fullText is built (so attachment
+    // text is available to judge) and before AI extraction. The extractor is told
+    // "this is a CV", so it cannot be trusted to also judge whether it is one.
+    let classification: CvClassification;
+    try {
+      classification = await this.cvClassifier.classify({
+        fullText,
+        subject: payload.Subject ?? '',
+        fromEmail: payload.From,
+        suspicious: filterResult.suspicious,
+        hasMeaningfulAttachment: this.spamFilter.hasMeaningfulAttachment(payload.Attachments),
+        bodyLength: (payload.TextBody ?? '').trim().length,
+        resolvedAgency: resolveAgencyFromEmail(payload.From),
+        tenantId,
+        messageId: payload.MessageID,
+      });
+    } catch (err) {
+      await this.prisma.emailIntakeLog.update({
+        where: { idx_intake_message_id: { tenantId, messageId: payload.MessageID } },
+        data: { processingStatus: 'failed', errorMessage: (err as Error).message },
+      });
+      this.pinoLogger.error(
+        { messageId: payload.MessageID, attempt: job.attemptsMade + 1, error: (err as Error).message },
+        'CV classification failed',
+      );
+      throw err;
+    }
+
+    if (classification.verdict === 'not_cv') {
+      await this.prisma.emailIntakeLog.update({
+        where: { idx_intake_message_id: { tenantId, messageId: payload.MessageID } },
+        data: { processingStatus: 'not_cv' },
+      });
+      this.pinoLogger.log(
+        { messageId: payload.MessageID, reason: classification.reason },
+        'CV classifier: not a job application',
+      );
+      return;
+    }
+
+    if (classification.verdict === 'uncertain') {
+      await this.prisma.emailIntakeLog.update({
+        where: { idx_intake_message_id: { tenantId, messageId: payload.MessageID } },
+        data: { processingStatus: 'needs_review' },
+      });
+      this.pinoLogger.log(
+        { messageId: payload.MessageID, reason: classification.reason },
+        'CV classifier: uncertain — needs human review',
+      );
+      return;
+    }
+
+    // verdict === 'cv' → continue the existing pipeline unchanged
+    this.pinoLogger.log(
+      { messageId: payload.MessageID, reason: classification.reason },
+      'CV classifier: confirmed job application',
+    );
 
     // Phase 3 output — passed to Phase 4 inline
     const context: ProcessingContext = {

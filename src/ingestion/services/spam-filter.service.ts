@@ -165,7 +165,7 @@ export class SpamFilterService {
    * BUG-1 fix: calendar attachments (text/calendar, application/ics) are also treated
    * as non-meaningful — they can never contain a CV.
    */
-  private hasMeaningfulAttachment(attachments: PostmarkPayloadDto['Attachments']): boolean {
+  public hasMeaningfulAttachment(attachments: PostmarkPayloadDto['Attachments']): boolean {
     if (!attachments || attachments.length === 0) return false;
 
     return attachments.some((att) => {

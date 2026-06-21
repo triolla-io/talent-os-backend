@@ -4,6 +4,7 @@ import { IngestionProcessor } from './ingestion.processor';
 import { SpamFilterService } from './services/spam-filter.service';
 import { AttachmentExtractorService } from './services/attachment-extractor.service';
 import { ExtractionAgentService } from './services/extraction-agent.service';
+import { CvClassifierService } from './services/cv-classifier.service';
 import { StorageModule } from '../storage/storage.module';
 import { DedupModule } from '../dedup/dedup.module';
 import { ScoringModule } from '../scoring/scoring.module';
@@ -20,6 +21,7 @@ import { ScoringModule } from '../scoring/scoring.module';
     SpamFilterService,
     AttachmentExtractorService,
     ExtractionAgentService,
+    CvClassifierService,
   ],
 })
 export class IngestionModule {}

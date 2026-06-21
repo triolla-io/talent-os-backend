@@ -38,7 +38,7 @@ const KNOWN_AGENCY_DOMAINS: Record<string, string> = {
  * Returns the canonical name if the domain is known, otherwise null.
  * Example: "talent@jobhunt.co.il" → "jobhunt"
  */
-function resolveAgencyFromEmail(fromEmail: string): string | null {
+export function resolveAgencyFromEmail(fromEmail: string): string | null {
   try {
     const atIndex = fromEmail.indexOf('@');
     if (atIndex === -1) return null;
