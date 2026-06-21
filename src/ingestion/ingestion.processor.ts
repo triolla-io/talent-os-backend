@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger as PinoLogger } from 'nestjs-pino';
@@ -18,6 +19,7 @@ export interface ProcessingContext {
   candidateId: string; // Phase 6 output — set immediately after INSERT/UPSERT; consumed by Phase 7
 }
 
+@Injectable()
 @Processor('ingest-email', {
   lockDuration: 30000, // 30s lock per job (Issue Fix 1: prevents timeout on long-running scoring loops)
   lockRenewTime: 5000, // renew lock every 5s

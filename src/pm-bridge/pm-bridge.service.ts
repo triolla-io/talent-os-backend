@@ -80,14 +80,14 @@ export class PmBridgeService {
     return result;
   }
 
-  async listDecisions(tenantId: string) {
+  listDecisions(tenantId: string) {
     return this.prisma.pmProductDecision.findMany({
       where: { tenantId },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
   }
 
-  async createDecision(data: CreateDecision, tenantId: string, createdBy: string) {
+  createDecision(data: CreateDecision, tenantId: string, createdBy: string) {
     return this.prisma.pmProductDecision.create({
       data: {
         tenantId,

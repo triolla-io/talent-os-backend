@@ -53,7 +53,7 @@ export class JobsService {
     return this._formatJobResponse(job);
   }
 
-  async createJob(dto: CreateJobDto, tenantId: string): Promise<any> {
+  createJob(dto: CreateJobDto, tenantId: string): Promise<any> {
     // Use provided stages, or auto-seed 4 defaults if hiring_flow is omitted/empty
     const stagesToCreate =
       dto.hiring_flow && dto.hiring_flow.length > 0

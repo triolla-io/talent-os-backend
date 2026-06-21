@@ -17,7 +17,7 @@ import type { Request } from 'express';
 import { ZodError } from 'zod';
 import { SessionGuard } from '../auth/session.guard';
 import { JobsService } from './jobs.service';
-import { CreateJobSchema } from './dto/create-job.dto';
+import { CreateJobSchema, CreateJobDto } from './dto/create-job.dto';
 
 @UseGuards(SessionGuard)
 @Controller('jobs')
@@ -45,36 +45,16 @@ export class JobsController {
   @Post()
   async create(@Body() body: unknown, @Req() req: Request) {
     const tenantId = req.session!.org;
-    const result = CreateJobSchema.safeParse(body);
-    if (!result.success) {
-      const fieldErrors = this.formatZodErrors(result.error);
-      throw new BadRequestException({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Validation failed',
-          details: fieldErrors,
-        },
-      });
-    }
-    return this.jobsService.createJob(result.data, tenantId);
+    const dto = this.parseJobBody(body);
+    return this.jobsService.createJob(dto, tenantId);
   }
 
   @Put(':id')
   async update(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
     const tenantId = req.session!.org;
-    const result = CreateJobSchema.safeParse(body);
-    if (!result.success) {
-      const fieldErrors = this.formatZodErrors(result.error);
-      throw new BadRequestException({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Validation failed',
-          details: fieldErrors,
-        },
-      });
-    }
+    const dto = this.parseJobBody(body);
     try {
-      return await this.jobsService.updateJob(id, result.data, tenantId);
+      return await this.jobsService.updateJob(id, dto, tenantId);
     } catch (error: any) {
       // Prisma P2025: record not found
       if (error?.code === 'P2025' || error instanceof NotFoundException) {
@@ -128,6 +108,24 @@ export class JobsController {
       }
       throw error;
     }
+  }
+
+  /**
+   * Validate a raw request body against CreateJobSchema.
+   * Throws BadRequestException with field-level details on failure; returns the typed DTO otherwise.
+   */
+  private parseJobBody(body: unknown): CreateJobDto {
+    const result = CreateJobSchema.safeParse(body);
+    if (!result.success) {
+      throw new BadRequestException({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          details: this.formatZodErrors(result.error),
+        },
+      });
+    }
+    return result.data;
   }
 
   /**

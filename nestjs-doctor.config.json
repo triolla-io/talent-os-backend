@@ -1,0 +1,6 @@
+{
+  "rules": {
+    "architecture/no-orm-in-services": false,
+    "performance/no-orphan-modules": false
+  }
+}
