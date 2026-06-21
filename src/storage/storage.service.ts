@@ -165,6 +165,36 @@ export class StorageService {
     }
   }
 
+  async saveClassificationCache(result: Record<string, unknown>, tenantId: string, messageId: string): Promise<void> {
+    const key = `emails/${tenantId}/${messageId}/classification.json`;
+    await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: this.config.get<string>('R2_BUCKET_NAME')!,
+        Key: key,
+        Body: JSON.stringify(result),
+        ContentType: 'application/json',
+      }),
+    );
+    this.logger.log(`Cached classification result at ${key}`);
+  }
+
+  async loadClassificationCache(tenantId: string, messageId: string): Promise<Record<string, unknown> | null> {
+    const key = `emails/${tenantId}/${messageId}/classification.json`;
+    try {
+      const response = await this.s3Client.send(
+        new GetObjectCommand({
+          Bucket: this.config.get<string>('R2_BUCKET_NAME')!,
+          Key: key,
+        }),
+      );
+      const body = await response.Body!.transformToString();
+      return JSON.parse(body) as Record<string, unknown>;
+    } catch (err: any) {
+      if (err.name === 'NoSuchKey') return null;
+      throw err;
+    }
+  }
+
   private selectLargestCvAttachment(attachments: PostmarkAttachmentDto[]): PostmarkAttachmentDto | null {
     // D-01: Only PDF/DOCX; picks the one with the largest ContentLength
     const cvFiles = attachments.filter((att) => (CV_MIME_TYPES as readonly string[]).includes(att.ContentType));
