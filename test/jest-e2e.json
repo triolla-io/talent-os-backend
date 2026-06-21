@@ -6,6 +6,7 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
+  "transformIgnorePatterns": ["node_modules/(?!@openrouter|jose)"],
   "moduleNameMapper": {
     "^@openrouter/sdk$": "<rootDir>/__mocks__/@openrouter/sdk.js"
   }

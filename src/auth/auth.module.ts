@@ -27,8 +27,11 @@ import { StorageModule } from '../storage/storage.module';
     // worker bootstraps WorkerModule, which does not import AuthModule, so it is unaffected.
     { provide: APP_GUARD, useExisting: SessionGuard },
   ],
-  // Only SessionGuard is consumed by importing modules (via @UseGuards). JwtService and
-  // EmailService are used only within this module, so they are not exported.
-  exports: [SessionGuard],
+  // SessionGuard AND JwtService must both be exported: modules that apply
+  // @UseGuards(SessionGuard) (candidates, jobs, applications, pm-bridge, config) construct
+  // the guard in their own injector context, so JwtService — the guard's dependency — must
+  // be resolvable there too. Exporting SessionGuard alone makes the API fail to boot.
+  // EmailService stays unexported — it is used only within this module.
+  exports: [SessionGuard, JwtService],
 })
 export class AuthModule {}
