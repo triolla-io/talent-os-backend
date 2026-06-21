@@ -17,7 +17,6 @@ export function mockCandidateDedupExtract(
     ai_summary: 'Experienced engineer.',
     source_hint: null,
     source_agency: null,
-    suspicious: false,
     ...overrides,
   };
 }
