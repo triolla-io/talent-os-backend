@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { EmailAttachmentDto, EmailPayloadDto } from '../webhooks/dto/mailgun-payload.dto';
+import { EmailAttachmentDto, EmailPayloadDto } from '../webhooks';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const CV_MIME_TYPES = [
@@ -55,7 +55,7 @@ export class StorageService {
     return key;
   }
 
-  async getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
+  getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.config.get<string>('R2_BUCKET_NAME')!,
       Key: key,

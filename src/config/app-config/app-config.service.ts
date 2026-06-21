@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CANDIDATE_SOURCES } from '../../candidates/dto/create-candidate.dto';
+import { CANDIDATE_SOURCES } from '../../candidates';
 
 const SOURCE_LABELS: Record<(typeof CANDIDATE_SOURCES)[number], string> = {
   linkedin: 'LinkedIn',

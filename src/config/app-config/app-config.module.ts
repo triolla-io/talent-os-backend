@@ -6,7 +6,7 @@ import { AuthModule } from '../../auth/auth.module';
 @Module({
   imports: [AuthModule],
   controllers: [AppConfigController],
+  // AppConfigService is consumed only by AppConfigController (same module), so it is not exported.
   providers: [AppConfigService],
-  exports: [AppConfigService],
 })
 export class AppConfigModule {}
