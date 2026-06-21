@@ -1,69 +1,46 @@
-<!-- GSD:project-start source:PROJECT.md -->
+# Triolla Talent OS — Backend
 
-## Project
+Automated email-intake pipeline for Triolla's recruiting platform: CVs arrive by email via
+**Mailgun** inbound webhooks → AI extracts candidate data → dedup → scored against open jobs →
+stored in PostgreSQL for the recruiter UI. The intake pipeline is fully reactive (no human
+trigger), but the platform now also has organizations, users, session auth (Google OAuth +
+magic link), invitations, team management, and role-based access (admin / recruiter / viewer).
 
-**Triolla Talent OS — Backend**
+## Stack (locked, not negotiable)
 
-An automated email intake pipeline for Triolla's recruiting platform. It receives CVs by email via Postmark webhooks, extracts candidate data using AI, detects duplicates, scores candidates against open positions, and stores everything in PostgreSQL — ready for the recruiter UI to consume in Phase 2. Phase 1 is purely reactive: no human-initiated writes, no auth, no UI.
-
-**Core Value:** Inbound CVs are automatically processed, de-duplicated, and scored against open jobs without any manual recruiter effort — the pipeline runs end-to-end from email receipt to scored candidate record.
-
-### Constraints
-
-- **Tech Stack:** TypeScript only, NestJS 11, BullMQ + Redis, Prisma 7, PostgreSQL 16 — locked, not negotiable
-- **AI Provider:** OpenRouter via `@openrouter/sdk` — currently `openai/gpt-4o-mini` for both extraction and scoring
-- **Storage:** Cloudflare R2 for original CV files (S3-compatible, 10GB free tier)
-- **Email:** Postmark Inbound webhooks — no Gmail API polling in Phase 1
-- **Dedup:** pg_trgm in PostgreSQL only — no in-memory fuzzy matching, no vector DB
-- **DB conventions:** `text` + CHECK constraints over PostgreSQL ENUMs (ENUMs require migration to add values); no binary blobs in DB; `updated_at` via Prisma `@updatedAt`
-- **Multi-tenancy:** `tenant_id` on every table from day 1 — prevents schema rewrite later
-<!-- GSD:project-end -->
-
-<!-- GSD:stack-start source:STACK.md -->
-
-## Technology Stack
-
-- **Runtime:** Node.js 22, TypeScript 5
-- **Framework:** NestJS 11 (two entry points: `src/main.ts` = API, `src/worker.ts` = BullMQ worker)
+- **Runtime/Framework:** Node.js 22, TypeScript 5, NestJS 11 — two entry points:
+  `src/main.ts` (API) and `src/worker.ts` (BullMQ worker)
 - **Queue:** BullMQ + Redis 7
-- **ORM:** Prisma 7 with `@prisma/adapter-pg` (direct pg driver)
-- **DB:** PostgreSQL 16
-- **AI:** `@openrouter/sdk` — model: `openai/gpt-4o-mini`
-- **Storage:** Cloudflare R2 via `@aws-sdk/client-s3`
-- **Email:** Postmark inbound webhook → `/webhooks/postmark`
-<!-- GSD:stack-end -->
-
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
-
-## Conventions
-
-Conventions not yet established. Will populate as patterns emerge during development.
-
-<!-- GSD:conventions-end -->
-
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
+- **ORM/DB:** Prisma 7 with `@prisma/adapter-pg` → PostgreSQL 16
+- **AI:** OpenRouter (`@openrouter/sdk`), model `openai/gpt-4o-mini` (extraction + scoring)
+- **Storage:** Cloudflare R2 (`@aws-sdk/client-s3`) for original CV files
+- **Email:** Mailgun inbound webhook → `POST /webhooks/email`
+- **Dedup:** pg_trgm in PostgreSQL only — no vector DB, no in-memory fuzzy matching
 
 ## Architecture
 
-Two Docker containers share the same codebase:
+Two Docker containers, one codebase:
 
-- **api** (`src/main.ts`): HTTP server — webhooks, jobs CRUD, candidates, health
+- **api** (`src/main.ts`): HTTP — webhooks, auth/team, jobs CRUD, candidates, applications, health
 - **worker** (`src/worker.ts`): BullMQ consumer — ingestion pipeline (extract → dedup → score → store)
 
-Modules: `webhooks`, `ingestion`, `candidates`, `jobs`, `applications`, `scoring`, `dedup`, `storage`, `health`, `config`
+API modules: `webhooks`, `auth` (+ team), `candidates`, `jobs`, `applications`, `health`,
+`config`, `pm-bridge` (Jira). Worker modules: `ingestion`, `scoring`, `dedup`, `storage`.
 
-<!-- GSD:architecture-end -->
+## Conventions
+
+- `text` + CHECK constraints over PostgreSQL ENUMs (ENUMs need a migration to add values)
+- No binary blobs in DB; `updated_at` via Prisma `@updatedAt`
+- `tenant_id` on every table from day 1 (multi-tenancy baked in to avoid a schema rewrite later)
 
 ## Commands
 
 ```bash
 npm run docker:up          # Start all services (API + worker + Postgres + Redis)
 npm run docker:up:build    # Rebuild before starting
-npm run docker:logs        # Tail all logs
-npm run docker:logs:api    # API logs only
-npm run docker:logs:worker # Worker logs only
+npm run docker:logs        # Tail all logs (:api / :worker for one)
 npm run db:migrate         # Run Prisma migrations inside container
-npm run db:studio          # Open Prisma Studio locally
+npm run db:studio          # Open Prisma Studio locally (needs docker:up running first)
 npm test                   # Unit tests
 npm run ngrok              # Expose webhook endpoint via ngrok
 ```
@@ -71,47 +48,24 @@ npm run ngrok              # Expose webhook endpoint via ngrok
 ## Required Environment Variables
 
 ```
-DATABASE_URL           # postgresql://...
-REDIS_URL              # redis://...
-OPENROUTER_API_KEY     # OpenRouter API key
-POSTMARK_WEBHOOK_TOKEN # Webhook auth token
-TENANT_ID              # UUID of the default tenant
-R2_ACCOUNT_ID          # Cloudflare R2
-R2_ACCESS_KEY_ID
-R2_SECRET_ACCESS_KEY
-R2_BUCKET_NAME
+DATABASE_URL                  # postgresql://...
+REDIS_URL                     # redis://...
+OPENROUTER_API_KEY
+MAILGUN_WEBHOOK_SIGNING_KEY   # verifies inbound Mailgun webhooks
+TENANT_ID                     # UUID of the default tenant
+R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET_NAME
+
+# Auth (API process)
+JWT_SECRET                    # ≥32 chars — signs sessions/tokens
+GOOGLE_CLIENT_ID              # optional — Google OAuth sign-in
+FRONTEND_URL                  # default http://localhost:5173 — used in magic-link / invite emails
+SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / SMTP_FROM   # outbound auth email (Mailgun SMTP)
 
 # PM Bridge — Jira integration
-JIRA_BASE_URL          # https://triolla.atlassian.net
-JIRA_EMAIL             # Atlassian account email for Basic auth
-JIRA_API_TOKEN         # Atlassian API token (never logged)
-JIRA_PROJECT_KEY       # default: TO
-JIRA_SPRINT_ID         # optional numeric sprint ID — new issues are auto-added to this sprint
-PM_BRIDGE_ALLOWLIST    # comma-separated emails allowed to use PM Bridge (default: empty = no one)
-PM_BRIDGE_MODEL        # OpenRouter model for draft+validate (default: anthropic/claude-sonnet-4.6)
+JIRA_BASE_URL                 # https://triolla.atlassian.net
+JIRA_EMAIL / JIRA_API_TOKEN   # Basic auth (token never logged)
+JIRA_PROJECT_KEY              # default: TO
+JIRA_SPRINT_ID                # optional — new issues auto-added to this sprint
+PM_BRIDGE_ALLOWLIST           # comma-separated emails allowed to use PM Bridge (default: none)
+PM_BRIDGE_MODEL               # OpenRouter model for draft+validate (default: anthropic/claude-sonnet-4.6)
 ```
-
-<!-- GSD:workflow-start source:GSD defaults -->
-
-## GSD Workflow Enforcement
-
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
-
-Use these entry points:
-
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-
-<!-- GSD:workflow-end -->
-
-<!-- GSD:profile-start -->
-
-## Developer Profile
-
-> Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-
-<!-- GSD:profile-end -->

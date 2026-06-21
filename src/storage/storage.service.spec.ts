@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { StorageService } from './storage.service';
-import { PostmarkAttachmentDto } from '../webhooks/dto/mailgun-payload.dto';
+import { EmailAttachmentDto } from '../webhooks/dto/mailgun-payload.dto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const mockS3Send = jest.fn();
@@ -42,21 +42,21 @@ describe('StorageService', () => {
     service = module.get<StorageService>(StorageService);
   });
 
-  const pdfAttachment = (): PostmarkAttachmentDto => ({
+  const pdfAttachment = (): EmailAttachmentDto => ({
     Name: 'cv.pdf',
     ContentType: 'application/pdf',
     ContentLength: 150000,
     Content: Buffer.from('PDF data').toString('base64'),
   });
 
-  const docxAttachment = (): PostmarkAttachmentDto => ({
+  const docxAttachment = (): EmailAttachmentDto => ({
     Name: 'cv.docx',
     ContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ContentLength: 100000,
     Content: Buffer.from('DOCX data').toString('base64'),
   });
 
-  const pngAttachment = (): PostmarkAttachmentDto => ({
+  const pngAttachment = (): EmailAttachmentDto => ({
     Name: 'signature.png',
     ContentType: 'image/png',
     ContentLength: 5000,

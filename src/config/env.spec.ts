@@ -5,7 +5,7 @@ const validEnv = {
   REDIS_URL: 'redis://localhost:6379',
   // ANTHROPIC_API_KEY: 'sk-ant-test',
   OPENROUTER_API_KEY: 'sk-or-test',
-  POSTMARK_WEBHOOK_TOKEN: 'test-token',
+  MAILGUN_WEBHOOK_SIGNING_KEY: 'test-signing-key',
   TENANT_ID: '123e4567-e89b-12d3-a456-426614174000',
   R2_ACCOUNT_ID: 'acc123',
   R2_ACCESS_KEY_ID: 'key123',

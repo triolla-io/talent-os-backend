@@ -4,7 +4,7 @@ import { IngestionProcessor } from './ingestion.processor';
 import { SpamFilterService } from './services/spam-filter.service';
 import { AttachmentExtractorService } from './services/attachment-extractor.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { mockPostmarkPayload } from './services/spam-filter.service.spec';
+import { mockEmailPayload } from './services/spam-filter.service.spec';
 import { ExtractionAgentService } from './services/extraction-agent.service';
 import { CvClassifierService } from './services/cv-classifier.service';
 import { mockCandidateExtract } from './services/extraction-agent.service.test-helpers';
@@ -23,7 +23,7 @@ jest.mock('mammoth', () => ({
 }));
 
 /** Helper: build a slim job with new IngestJobData shape */
-function makeJob(id: string, payload: ReturnType<typeof mockPostmarkPayload>) {
+function makeJob(id: string, payload: ReturnType<typeof mockEmailPayload>) {
   return {
     id,
     name: 'ingest-email',
@@ -96,7 +96,7 @@ describe('IngestionProcessor', () => {
   // 3-03-01: PROC-06 — spam rejection updates status to 'spam'
   it('hard reject updates status', async () => {
     // Payload with no attachment and short body → spamFilter returns { isSpam: true }
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       TextBody: 'hi',
       Attachments: [],
     });
@@ -117,7 +117,7 @@ describe('IngestionProcessor', () => {
   // 3-03-02: PROC-06 — passing email updates status to 'processing'
   it('pass filter updates status', async () => {
     // Clean email with long body — no spam keywords, no short body
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       Subject: 'Job Application from Jane Doe',
       TextBody: 'Dear Hiring Manager, I am writing to apply for the position. ' +
                 'I have 5 years of experience in software engineering. ' +
@@ -140,7 +140,7 @@ describe('IngestionProcessor', () => {
   it('extraction failure marks status failed', async () => {
     extractionAgent.extract.mockRejectedValueOnce(new Error('LLM timeout'));
 
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       Subject: 'Job Application from Jane Doe',
       TextBody:
         'Dear Hiring Manager, I am writing to apply for the position. ' +
@@ -168,7 +168,7 @@ describe('IngestionProcessor', () => {
   it('processor does NOT call storageService.upload (CV upload moved to webhook)', async () => {
     extractionAgent.extract.mockRejectedValueOnce(new Error('LLM timeout'));
 
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       Subject: 'Job Application from Jane Doe',
       TextBody:
         'Dear Hiring Manager, I am writing to apply for the position. ' +
@@ -191,7 +191,7 @@ describe('IngestionProcessor', () => {
       mockCandidateExtract({ full_name: 'Jane Doe' }),
     );
 
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       Subject: 'Job Application from Jane Doe',
       TextBody:
         'Dear Hiring Manager, I am writing to apply for the position. ' +
@@ -282,7 +282,7 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
   // Processor reads cvFileKey from existingIntake.cvFileKey (set by webhook).
   // This test verifies the processor uses the cvFileKey from existingIntake.
   it('5-02-01: processor reads cvFileKey from existingIntake (set by webhook, not processor)', async () => {
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       MessageID: 'test-message-id',
       Subject: 'Job Application from Jane Doe',
       TextBody:
@@ -320,7 +320,7 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
   it('5-02-02: propagates downloadPayload error to BullMQ (no inline catch)', async () => {
     storageService.downloadPayload.mockRejectedValueOnce(new Error('R2 service unavailable'));
 
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       Subject: 'Job Application from Jane Doe',
       TextBody:
         'Dear Hiring Manager, I have 5 years of experience in software engineering. Please find my CV attached.',
@@ -340,7 +340,7 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
 
   // 5-02-03: D-02, STOR-03 — null cvFileKey in existingIntake + processor continues normally
   it('5-02-03: passes null fileKey and cvText through ProcessingContext when no CV attachment', async () => {
-    const payload = mockPostmarkPayload({
+    const payload = mockEmailPayload({
       Subject: 'Job Application from Jane Doe',
       TextBody:
         'Dear Hiring Manager, I have 5 years of experience in software engineering. Please find my CV attached.',
@@ -435,7 +435,7 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
   afterEach(() => jest.clearAllMocks());
 
   const validJobPayload = () =>
-    mockPostmarkPayload({
+    mockEmailPayload({
       MessageID: 'msg-dedup-test',
       From: 'sender@example.com',
       Subject: '[Job ID: job-id-1] Job Application from Jane Doe',
@@ -679,7 +679,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
   afterEach(() => jest.clearAllMocks());
 
   const validJobPayload = () =>
-    mockPostmarkPayload({
+    mockEmailPayload({
       MessageID: 'msg-phase7-test',
       From: 'sender@example.com',
       Subject: 'Job Application for position 101',
@@ -714,7 +714,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
 
   it('7-02-02: SCOR-01 — Phase 15: job.findMany called with status:open for matched shortIds', async () => {
     // Phase 15: Extract numeric short_id from text, look up with status:open filter
-    const jobPayloadWithId = mockPostmarkPayload({
+    const jobPayloadWithId = mockEmailPayload({
       MessageID: 'msg-p15-test',
       From: 'sender@example.com',
       Subject: 'Job Application for position 101',
@@ -894,7 +894,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
 
     it('15-01: extracts numeric short_id from subject', async () => {
       prisma.job.findMany.mockResolvedValueOnce([job1]);
-      const payload = mockPostmarkPayload({ Subject: 'CV for position 100', TextBody: 'a'.repeat(101) });
+      const payload = mockEmailPayload({ Subject: 'CV for position 100', TextBody: 'a'.repeat(101) });
       storageService.downloadPayload.mockResolvedValue(payload);
       const job = makeJob('test-1', payload);
 
@@ -914,7 +914,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
 
     it('15-02: ignores numbers < 100', async () => {
       prisma.job.findMany.mockResolvedValueOnce([]);
-      const payload = mockPostmarkPayload({ Subject: 'I am 25 years old', TextBody: 'Position 50 is closed. a'.repeat(10) });
+      const payload = mockEmailPayload({ Subject: 'I am 25 years old', TextBody: 'Position 50 is closed. a'.repeat(10) });
       storageService.downloadPayload.mockResolvedValue(payload);
       const job = makeJob('test-2', payload);
 
@@ -934,7 +934,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
       prisma.application.upsert
         .mockResolvedValueOnce({ id: 'app-1' })
         .mockResolvedValueOnce({ id: 'app-2' });
-      const payload = mockPostmarkPayload({
+      const payload = mockEmailPayload({
         Subject: 'CV Submission',
         TextBody: 'I am interested in both position 100 and 101. a'.repeat(5),
       });
@@ -953,7 +953,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
     });
 
     it('15-04: gracefully handles no numeric short_ids in email', async () => {
-      const payload = mockPostmarkPayload({ Subject: 'Random CV', TextBody: 'a'.repeat(101) });
+      const payload = mockEmailPayload({ Subject: 'Random CV', TextBody: 'a'.repeat(101) });
       storageService.downloadPayload.mockResolvedValue(payload);
       const job = makeJob('test-4', payload);
 
@@ -972,7 +972,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
 
     it('15-05: includes years as false positives (filtered by DB)', async () => {
       prisma.job.findMany.mockResolvedValueOnce([]);
-      const payload = mockPostmarkPayload({ Subject: 'In 2024 I applied', TextBody: 'Job 101 is open. ' + 'a'.repeat(101) });
+      const payload = mockEmailPayload({ Subject: 'In 2024 I applied', TextBody: 'Job 101 is open. ' + 'a'.repeat(101) });
       storageService.downloadPayload.mockResolvedValue(payload);
       const job = makeJob('test-5', payload);
 
@@ -990,7 +990,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
 
     it('15-06: deduplicates repeated numeric short_ids', async () => {
       prisma.job.findMany.mockResolvedValueOnce([job1]);
-      const payload = mockPostmarkPayload({
+      const payload = mockEmailPayload({
         Subject: 'position 100',
         TextBody: 'Very interested in position 100. a'.repeat(20),
       });
@@ -1087,7 +1087,7 @@ describe('IngestionProcessor — Phase 6 idempotency guard', () => {
   let dedupService: any;
   let storageService: any;
 
-  const validPayload = () => mockPostmarkPayload({
+  const validPayload = () => mockEmailPayload({
     MessageID: 'msg-idempotency-test',
     From: 'sender@example.com',
     Subject: 'Job Application from Jane Doe',
@@ -1177,7 +1177,7 @@ describe('IngestionProcessor — CV Classification Gate', () => {
   let storageService: { upload: jest.Mock; downloadPayload: jest.Mock };
 
   const cvPayload = () =>
-    mockPostmarkPayload({
+    mockEmailPayload({
       MessageID: 'msg-gate-test',
       From: 'candidate@example.com',
       Subject: 'Application for Backend Developer',
@@ -1281,7 +1281,7 @@ describe('IngestionProcessor — CV Classification Gate', () => {
 
   it('spam short-circuits BEFORE the classifier runs', async () => {
     // No meaningful attachment + body < 100 chars → spam filter hard-rejects (unchanged behavior)
-    const spamPayload = mockPostmarkPayload({ MessageID: 'msg-gate-spam', TextBody: 'hi', Attachments: [] });
+    const spamPayload = mockEmailPayload({ MessageID: 'msg-gate-spam', TextBody: 'hi', Attachments: [] });
     storageService.downloadPayload.mockResolvedValue(spamPayload);
 
     await processor.process(makeJob('gate-spam', spamPayload));

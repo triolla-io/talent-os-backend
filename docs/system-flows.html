@@ -635,7 +635,7 @@
             <div class="arch-item">
               <div class="arch-item-dot" style="background: var(--accent-blue)"></div>
               <div class="arch-item-label">POST /webhooks/email</div>
-              <div class="arch-item-desc">Postmark intake</div>
+              <div class="arch-item-desc">Mailgun intake</div>
             </div>
             <div class="arch-item">
               <div class="arch-item-dot" style="background: var(--accent-green)"></div>
@@ -735,7 +735,7 @@
           <div class="arch-item" style="border: none">
             <div class="arch-item-dot" style="background: var(--accent-cyan)"></div>
             <div>
-              <div class="arch-item-label">Postmark</div>
+              <div class="arch-item-label">Mailgun</div>
               <div class="arch-item-desc">Inbound email webhook provider</div>
             </div>
           </div>
@@ -750,7 +750,7 @@
             <div style="text-align: center; padding: 10px 14px">
               <div style="font-size: 22px; margin-bottom: 4px">📧</div>
               <div style="font-size: 12px; font-weight: 600; color: var(--accent-blue)">Email Arrives</div>
-              <div style="font-size: 11px; color: var(--muted)">via Postmark</div>
+              <div style="font-size: 11px; color: var(--muted)">via Mailgun</div>
             </div>
             <div style="color: var(--border); font-size: 20px; padding: 0 4px">→</div>
             <div style="text-align: center; padding: 10px 14px">
@@ -793,7 +793,7 @@
     <div id="tab-ingestion" class="section">
       <div class="section-header">
         <h2>Email Ingestion Pipeline</h2>
-        <p>End-to-end automated flow: from Postmark webhook to a scored candidate record in the database.</p>
+        <p>End-to-end automated flow: from Mailgun webhook to a scored candidate record in the database.</p>
       </div>
 
       <div class="legend">
@@ -842,12 +842,12 @@
               </div>
             </div>
             <div class="step-desc">
-              Postmark sends the inbound email as JSON. The request passes through two guards before reaching the
+              Mailgun sends the inbound email as multipart/form-data. The request passes through two guards before reaching the
               handler.
             </div>
             <div class="step-tags">
               <span class="tag bg-blue c-blue">ThrottlerGuard — 100 req / 60s</span>
-              <span class="tag bg-blue c-blue">PostmarkAuthGuard — HTTP Basic Auth</span>
+              <span class="tag bg-blue c-blue">MailgunAuthGuard — HMAC signature</span>
               <span class="tag bg-blue c-blue">Zod payload validation</span>
             </div>
           </div>
@@ -871,14 +871,10 @@
               </div>
             </div>
             <div class="step-desc">
-              Prevents duplicate processing if Postmark retries the webhook or a crash left a job mid-flight.
+              Prevents duplicate processing if Mailgun retries the webhook or a crash left a job mid-flight.
             </div>
             <div class="decision-block">
               <div class="decision-title">Decision Logic</div>
-              <div class="decision-row">
-                <span class="decision-cond">messageId = test GUID</span>
-                <span class="decision-result">→ Return 200 immediately (Postmark ping, ignored)</span>
-              </div>
               <div class="decision-row">
                 <span class="decision-cond">status = 'pending'</span>
                 <span class="decision-result">→ Re-enqueue (previous attempt crashed) </span>
@@ -998,7 +994,7 @@
               </div>
             </div>
             <div class="step-desc">
-              Attachment files (base64 in Postmark payload) are decoded and parsed into plain text. Combined with the
+              Attachment files (base64 in the normalized payload) are decoded and parsed into plain text. Combined with the
               email body to form the full CV context.
             </div>
             <div class="flow-split flow-split-2" style="margin-top: 10px">
@@ -1946,7 +1942,7 @@
             <div class="field-row"><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
             <div class="field-row"><span class="field-name">tenantId</span><span class="field-type">UUID FK</span></div>
             <div class="field-row">
-              <span class="field-name">messageId</span><span class="field-type">text (Postmark GUID)</span>
+              <span class="field-name">messageId</span><span class="field-type">text (email Message-ID)</span>
             </div>
             <div class="field-row"><span class="field-name">fromEmail</span><span class="field-type">text</span></div>
             <div class="field-row"><span class="field-name">subject</span><span class="field-type">text?</span></div>
@@ -2082,12 +2078,12 @@
       <div class="section-header">
         <h2>Pipeline Flowchart</h2>
         <p>
-          End-to-end email-to-database flow: from Postmark inbound webhook to scored candidate record in PostgreSQL.
+          End-to-end email-to-database flow: from Mailgun inbound webhook to scored candidate record in PostgreSQL.
         </p>
       </div>
 
       <div style="max-width: 520px; margin: 0 auto; font-family: inherit">
-        <!-- Step 1: Postmark -->
+        <!-- Step 1: Mailgun -->
         <div
           style="
             background: var(--surface);
@@ -2109,7 +2105,7 @@
           >
             Trigger
           </div>
-          <div style="font-weight: 600; color: var(--text); font-size: 14px">Postmark Inbound Email</div>
+          <div style="font-weight: 600; color: var(--text); font-size: 14px">Mailgun Inbound Email</div>
           <div style="font-size: 12px; color: var(--muted); margin-top: 4px">
             POST /api/webhooks/email &nbsp;·&nbsp; HTTP Basic Auth
           </div>

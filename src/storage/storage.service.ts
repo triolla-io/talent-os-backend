@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { PostmarkAttachmentDto, PostmarkPayloadDto } from '../webhooks/dto/mailgun-payload.dto';
+import { EmailAttachmentDto, EmailPayloadDto } from '../webhooks/dto/mailgun-payload.dto';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const CV_MIME_TYPES = [
@@ -26,7 +26,7 @@ export class StorageService {
   }
 
   // D-01, D-02, D-04, D-06, D-10, D-11
-  async upload(attachments: PostmarkAttachmentDto[], tenantId: string, messageId: string): Promise<string | null> {
+  async upload(attachments: EmailAttachmentDto[], tenantId: string, messageId: string): Promise<string | null> {
     // D-01: Select largest PDF/DOCX; filters out signature images, logos, etc.
     const selected = this.selectLargestCvAttachment(attachments);
     if (!selected) {
@@ -109,7 +109,7 @@ export class StorageService {
     this.logger.log(`Uploaded logo ${key} to R2 (${buffer.length} bytes)`);
   }
 
-  async uploadPayload(payload: PostmarkPayloadDto, tenantId: string, messageId: string): Promise<string> {
+  async uploadPayload(payload: EmailPayloadDto, tenantId: string, messageId: string): Promise<string> {
     const key = `emails/${tenantId}/${messageId}/payload.json`;
     await this.s3Client.send(
       new PutObjectCommand({
@@ -123,7 +123,7 @@ export class StorageService {
     return key;
   }
 
-  async downloadPayload(tenantId: string, messageId: string): Promise<PostmarkPayloadDto> {
+  async downloadPayload(tenantId: string, messageId: string): Promise<EmailPayloadDto> {
     const key = `emails/${tenantId}/${messageId}/payload.json`;
     const response = await this.s3Client.send(
       new GetObjectCommand({
@@ -132,7 +132,7 @@ export class StorageService {
       }),
     );
     const body = await response.Body!.transformToString();
-    return JSON.parse(body) as PostmarkPayloadDto;
+    return JSON.parse(body) as EmailPayloadDto;
   }
 
   async saveExtractionCache(result: Record<string, unknown>, tenantId: string, messageId: string): Promise<void> {
@@ -195,7 +195,7 @@ export class StorageService {
     }
   }
 
-  private selectLargestCvAttachment(attachments: PostmarkAttachmentDto[]): PostmarkAttachmentDto | null {
+  private selectLargestCvAttachment(attachments: EmailAttachmentDto[]): EmailAttachmentDto | null {
     // D-01: Only PDF/DOCX; picks the one with the largest ContentLength
     const cvFiles = attachments.filter((att) => (CV_MIME_TYPES as readonly string[]).includes(att.ContentType));
     if (cvFiles.length === 0) return null;

@@ -13,7 +13,7 @@ jest.mock('mammoth', () => ({
 }));
 
 import { AttachmentExtractorService } from './attachment-extractor.service';
-import { PostmarkAttachmentDto } from '../../webhooks/dto/mailgun-payload.dto';
+import { EmailAttachmentDto } from '../../webhooks/dto/mailgun-payload.dto';
 import { mockBase64Pdf, mockBase64Docx } from './spam-filter.service.spec';
 
 describe('AttachmentExtractorService', () => {
@@ -26,7 +26,7 @@ describe('AttachmentExtractorService', () => {
 
   // 3-02-01: PROC-04 — PDF extraction with demarcation
   it('PDF extraction', async () => {
-    const att: PostmarkAttachmentDto = {
+    const att: EmailAttachmentDto = {
       Name: 'cv.pdf',
       ContentType: 'application/pdf',
       Content: mockBase64Pdf(),
@@ -39,7 +39,7 @@ describe('AttachmentExtractorService', () => {
 
   // 3-02-02: PROC-05 — DOCX extraction with demarcation and HTML stripped
   it('DOCX extraction', async () => {
-    const att: PostmarkAttachmentDto = {
+    const att: EmailAttachmentDto = {
       Name: 'cover-letter.docx',
       ContentType:
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -54,7 +54,7 @@ describe('AttachmentExtractorService', () => {
 
   // 3-02-03: D-04 — unsupported type skipped silently
   it('unsupported type', async () => {
-    const att: PostmarkAttachmentDto = {
+    const att: EmailAttachmentDto = {
       Name: 'photo.png',
       ContentType: 'image/png',
       Content: 'abc123',
@@ -74,7 +74,7 @@ describe('AttachmentExtractorService', () => {
         .mockRejectedValueOnce(new Error('Invalid PDF structure')),
     }));
 
-    const att: PostmarkAttachmentDto = {
+    const att: EmailAttachmentDto = {
       Name: 'corrupt.pdf',
       ContentType: 'application/pdf',
       Content: mockBase64Pdf(),
@@ -86,13 +86,13 @@ describe('AttachmentExtractorService', () => {
 
   // 3-02-05: D-01, D-02 — multiple attachments merged with demarcation
   it('multiple attachments', async () => {
-    const pdf: PostmarkAttachmentDto = {
+    const pdf: EmailAttachmentDto = {
       Name: 'cv.pdf',
       ContentType: 'application/pdf',
       Content: mockBase64Pdf(),
       ContentLength: 100,
     };
-    const docx: PostmarkAttachmentDto = {
+    const docx: EmailAttachmentDto = {
       Name: 'cover.docx',
       ContentType:
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

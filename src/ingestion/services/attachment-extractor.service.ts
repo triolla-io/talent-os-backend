@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
-import { PostmarkAttachmentDto } from '../../webhooks/dto/mailgun-payload.dto';
+import { EmailAttachmentDto } from '../../webhooks/dto/mailgun-payload.dto';
 
 const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -10,7 +10,7 @@ const DOCX_CONTENT_TYPE =
 export class AttachmentExtractorService {
   private readonly logger = new Logger(AttachmentExtractorService.name);
 
-  async extract(attachments: PostmarkAttachmentDto[]): Promise<string> {
+  async extract(attachments: EmailAttachmentDto[]): Promise<string> {
     const sections: string[] = [];
 
     for (const att of attachments) {

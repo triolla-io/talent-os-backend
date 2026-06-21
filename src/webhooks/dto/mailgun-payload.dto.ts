@@ -29,9 +29,9 @@ export const MailgunRawBodySchema = z.object({
 
 export type MailgunRawBodyDto = z.infer<typeof MailgunRawBodySchema>;
 
-// ─── Internal normalized email payload (same shape as old PostmarkPayloadDto) ─
-// PascalCase field names kept intentionally so storage service, ingestion
-// pipeline, and worker require only an import-path update — no logic changes.
+// ─── Internal normalized email payload ───────────────────────────────────────
+// PascalCase field names used throughout the storage service, ingestion
+// pipeline, and worker.
 
 export const EmailAttachmentSchema = z.object({
   Name: z.string(),
@@ -54,12 +54,6 @@ export const EmailPayloadSchema = z.object({
 export type EmailAttachmentDto = z.infer<typeof EmailAttachmentSchema>;
 export type EmailPayloadDto = z.infer<typeof EmailPayloadSchema>;
 
-// Backward-compat aliases — lets storage/ingestion imports update path only
-export type PostmarkAttachmentDto = EmailAttachmentDto;
-export type PostmarkPayloadDto = EmailPayloadDto;
-export const PostmarkAttachmentSchema = EmailAttachmentSchema;
-export const PostmarkPayloadSchema = EmailPayloadSchema;
-
 // ─── Mapping: Mailgun multipart → internal EmailPayloadDto ───────────────────
 
 function extractEmail(from: string): string {
@@ -70,8 +64,7 @@ function extractEmail(from: string): string {
 export function parseMailgunPayload(body: MailgunRawBodyDto, files: Express.Multer.File[]): EmailPayloadDto {
   const headers = JSON.parse(body['message-headers']) as [string, string][];
   const msgIdEntry = headers.find(([name]) => name.toLowerCase() === 'message-id');
-  // Strip RFC-2822 angle brackets so the value is safe as an R2 key path segment
-  // and consistent with IDs stored by other providers (e.g. Postmark's bare UUIDs).
+  // Strip RFC-2822 angle brackets so the value is safe as an R2 key path segment.
   const rawMessageId = msgIdEntry?.[1] ?? body.token;
   const messageId = rawMessageId.replace(/^<|>$/g, '').trim();
 

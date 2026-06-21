@@ -1,6 +1,6 @@
 # Local Manual Testing
 
-> Test the full email-intake flow end-to-end: Postmark → ngrok → API → Worker → DB.
+> Test the full email-intake flow end-to-end: Mailgun → ngrok → API → Worker → DB.
 
 ## Prerequisites
 
@@ -9,7 +9,7 @@
 | Docker stack | `docker ps` — api, worker, postgres, redis all UP |
 | DB seeded | Prisma Studio → `tenants` has 1 row, `jobs` has 1 active row |
 | ngrok | Running and forwarding to `localhost:3000` |
-| Postmark webhook | Configured with the correct ngrok URL (see below) |
+| Mailgun route | Configured to forward to the correct ngrok URL (see below) |
 
 ## Setup
 
@@ -30,24 +30,15 @@ ngrok http 3000
 ```
 Copy the generated `https://xxxxx.ngrok-free.dev` URL.
 
-### 4. Configure Postmark webhook
+### 4. Configure Mailgun route
 
-In the [Postmark dashboard](https://account.postmarkapp.com) → Inbound → Set the webhook URL to:
+In the [Mailgun dashboard](https://app.mailgun.com) → Receiving → Routes → add a "Forward" action pointing at your ngrok URL:
 
 ```
-https://postmark:my-super-secret-123@<YOUR-NGROK-URL>/webhooks/email
-```
-
-⚠️ **Common mistake** — do NOT double the `https://`. The correct format is:
-```
-https://postmark:my-super-secret-123@madilynn-indefective-unetymologically.ngrok-free.dev/webhooks/email
-```
-NOT:
-```
-https://postmark:my-super-secret-123@https://madilynn-...  ← WRONG
+https://<YOUR-NGROK-URL>/api/webhooks/email
 ```
 
-The `postmark:my-super-secret-123` part is HTTP Basic Auth — Postmark sends it as the `Authorization: Basic ...` header. The password must match `POSTMARK_WEBHOOK_TOKEN` in `.env`.
+No credentials go in the URL. Mailgun signs every request (HMAC-SHA256 over `timestamp` + `token` using your **HTTP webhook signing key**), and `MailgunAuthGuard` verifies it. The signing key in Mailgun → Webhooks must match `MAILGUN_WEBHOOK_SIGNING_KEY` in `.env`.
 
 ### 5. Open Prisma Studio
 ```bash
@@ -67,7 +58,7 @@ npx prisma studio --url="postgresql://triolla:password@localhost:5432/triolla"
    docker compose logs -f worker
    ```
 
-2. **Send an email** with a PDF/DOCX CV attached to your Postmark inbound address (the one ending with `@inbound.postmarkapp.com`).
+2. **Send an email** with a PDF/DOCX CV attached to your Mailgun inbound address (e.g. `fun@mg.triolla.io`).
 
 3. **Watch the flow** in the logs:
    - **API tab**: Should show `Enqueued job for MessageID: xxx`
@@ -85,9 +76,10 @@ npx prisma studio --url="postgresql://triolla:password@localhost:5432/triolla"
 
 ---
 
-## Testing via local script (without Postmark)
+## Testing via local script (without Mailgun)
 
-Use the bundled script to simulate webhook calls directly against the API.
+Use the bundled script to simulate signed Mailgun webhook calls directly against the API.
+It builds a valid HMAC signature from `MAILGUN_WEBHOOK_SIGNING_KEY`, so that must be set in `.env`.
 
 ```bash
 # Drop CV files into local-test/files/
@@ -109,7 +101,7 @@ node local-test/run.js --health
 
 | Symptom | Fix |
 |---|---|
-| `401 Unauthorized` | Token mismatch — check `POSTMARK_WEBHOOK_TOKEN` in `.env` matches the webhook URL password |
+| `401 Unauthorized` | Signature mismatch — check `MAILGUN_WEBHOOK_SIGNING_KEY` in `.env` matches the signing key in Mailgun → Webhooks |
 | `processing_status = failed` | Read `error_message` in `email_intake_log` — usually missing API key or unsupported file |
 | Worker logs silent | Check `docker compose logs worker` — worker might have crashed on start |
 | ngrok `502 Bad Gateway` | API container not running or not on port 3000 |

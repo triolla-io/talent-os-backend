@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PostmarkPayloadDto } from '../../webhooks/dto/mailgun-payload.dto';
+import { EmailPayloadDto } from '../../webhooks/dto/mailgun-payload.dto';
 
 export interface SpamFilterResult {
   isSpam: boolean;
@@ -142,14 +142,14 @@ const NON_CV_CONTENT_TYPES: RegExp[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────
-// FIX #1: Inline attachment detection uses Postmark's ContentID
+// FIX #1: Inline attachment detection uses the ContentID
 // field. See hasMeaningfulAttachment() below.
 // ─────────────────────────────────────────────────────────────
 
 @Injectable()
 export class SpamFilterService {
   /**
-   * Postmark attachment schema (per inbound webhook docs):
+   * Normalized email attachment schema (EmailAttachmentDto):
    *   - Name: string          (filename)
    *   - Content: string       (base64-encoded data)
    *   - ContentType: string   (MIME type)
@@ -157,7 +157,7 @@ export class SpamFilterService {
    *   - ContentID: string     (CID reference — "" for real attachments,
    *                            populated e.g. "logo.png@01CE7342.75E71F80" for inline)
    *
-   * NOTE: Postmark does NOT provide ContentDisposition.
+   * NOTE: the inbound payload does NOT provide ContentDisposition.
    * ContentID is the only signal for distinguishing inline vs. attached.
    * As a defense-in-depth measure, we only treat inline entries as meaningless
    * if they are also images. Any documents with a ContentID are still considered attached.
@@ -165,7 +165,7 @@ export class SpamFilterService {
    * BUG-1 fix: calendar attachments (text/calendar, application/ics) are also treated
    * as non-meaningful — they can never contain a CV.
    */
-  public hasMeaningfulAttachment(attachments: PostmarkPayloadDto['Attachments']): boolean {
+  public hasMeaningfulAttachment(attachments: EmailPayloadDto['Attachments']): boolean {
     if (!attachments || attachments.length === 0) return false;
 
     return attachments.some((att) => {
@@ -218,7 +218,7 @@ export class SpamFilterService {
     return false;
   }
 
-  check(payload: PostmarkPayloadDto): SpamFilterResult {
+  check(payload: EmailPayloadDto): SpamFilterResult {
     // FIX #1: Use meaningful-attachment check instead of raw length > 0
     // BUG-1 fix: calendar attachments (text/calendar) are treated as non-meaningful
     const hasAttachment = this.hasMeaningfulAttachment(payload.Attachments);

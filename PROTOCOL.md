@@ -628,11 +628,11 @@ Fetch all active applications with nested candidate data (for Kanban board).
 
 ### `POST /webhooks/email`
 
-Postmark inbound webhook for email-based CV intake.
+Mailgun inbound webhook for email-based CV intake.
 
-**Authentication:** `PostmarkAuthGuard` (validates Postmark signature in request headers)
+**Authentication:** `MailgunAuthGuard` (verifies the HMAC-SHA256 signature in the form fields against `MAILGUN_WEBHOOK_SIGNING_KEY`)
 
-**Request Body:** Postmark inbound email payload
+**Request Body:** Mailgun inbound `multipart/form-data` (fields + attachment files), normalized internally to `EmailPayloadDto`
 
 **Response:** `200 OK`
 
@@ -644,15 +644,15 @@ Postmark inbound webhook for email-based CV intake.
 
 **Behavior:**
 
-- Validates Postmark webhook signature
+- Verifies the Mailgun webhook signature
 - Idempotent: returns 200 on duplicate MessageID
 - Enqueues email processing to BullMQ for async extraction, dedup, and scoring
-- Returns 5xx if enqueue fails (Postmark will retry)
+- Returns 5xx if enqueue fails (Mailgun will retry)
 
 **Errors:**
 
-- `401 Unauthorized` — invalid Postmark signature
-- `500 Internal Server Error` — failed to enqueue job (Postmark will retry)
+- `401 Unauthorized` — invalid Mailgun signature
+- `500 Internal Server Error` — failed to enqueue job (Mailgun will retry)
 
 ### `GET /webhooks/health`
 

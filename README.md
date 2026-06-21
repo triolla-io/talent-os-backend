@@ -1,11 +1,11 @@
 # TalentoOS — Backend
 
-Automated email intake pipeline: receives CVs via Postmark webhooks, extracts candidate data with AI, deduplicates by phone, scores against matched jobs, stores in PostgreSQL.
+Automated email intake pipeline: receives CVs via Mailgun webhooks, extracts candidate data with AI, deduplicates by phone, scores against matched jobs, stores in PostgreSQL.
 
 ## Prerequisites
 
 - **Docker** 24+ and **Docker Compose** v2+
-- **ngrok** (optional, for local Postmark webhook testing — `brew install ngrok`)
+- **ngrok** (optional, for local Mailgun webhook testing — `brew install ngrok`)
 
 > A `Makefile` is included as a convenience wrapper for common Docker workflows (`make up`, `make reset`, `make backup`). It requires `make` (pre-installed on macOS/Linux). All essential commands are also available as `npm run` scripts.
 
@@ -25,7 +25,7 @@ Automated email intake pipeline: receives CVs via Postmark webhooks, extracts ca
 | `DATABASE_URL`           | Yes      | PostgreSQL connection string. Format: `postgresql://user:pass@host:5432/db` |
 | `REDIS_URL`              | Yes      | Redis connection string. Format: `redis://host:6379`                        |
 | `OPENROUTER_API_KEY`     | Yes      | OpenRouter API key for `openai/gpt-4o-mini` (extraction and scoring)        |
-| `POSTMARK_WEBHOOK_TOKEN` | Yes      | Token from Postmark Inbound webhook settings (used for HTTP Basic Auth)     |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | Yes | Mailgun HTTP webhook signing key (Mailgun dashboard → Webhooks). Verifies the HMAC signature on inbound requests. |
 | `TENANT_ID`              | Yes      | UUID of the tenant record in the `tenants` table. Run seed to create.       |
 | `R2_ACCOUNT_ID`          | Yes      | Cloudflare R2 account ID (Cloudflare dashboard → R2 → Manage API Tokens)    |
 | `R2_ACCESS_KEY_ID`       | Yes      | Cloudflare R2 access key ID                                                 |
@@ -59,18 +59,18 @@ npm test                     # Unit tests (local, requires Node installed)
 npm run test:e2e             # E2E smoke tests (boots full NestJS app)
 
 # Webhook testing
-npm run ngrok                # Expose localhost:3000 via ngrok for Postmark testing
+npm run ngrok                # Expose localhost:3000 via ngrok for Mailgun testing
 ```
 
 ## How the Pipeline Works
 
-When a recruiter sends or forwards a CV to your Postmark inbound address, this is what happens:
+When a recruiter sends or forwards a CV to your Mailgun inbound address, this is what happens:
 
 ```
 Recruiter sends email with CV attachment
    │
    ▼
-POST /api/webhooks/email  (HTTP Basic Auth)
+POST /api/webhooks/email  (Mailgun HMAC signature verified)
    │
    ├─ Already seen this email? → return 200, do nothing
    │
@@ -129,7 +129,7 @@ Key endpoints:
 | `DELETE` | `/api/jobs/:id`       | Soft-delete a job                                                     |
 | `GET`    | `/api/candidates`     | List candidates (supports `?q=`, `?filter=`, `?job_id=`)              |
 | `GET`    | `/api/candidates/:id` | Single candidate with scores                                          |
-| `POST`   | `/api/webhooks/email` | Postmark inbound webhook (HTTP Basic Auth required)                   |
+| `POST`   | `/api/webhooks/email` | Mailgun inbound webhook (HMAC signature required)                    |
 
 ## Architecture
 
@@ -146,19 +146,21 @@ Infrastructure:
 | **Redis 7**       | BullMQ job queue between API and Worker                       |
 | **Cloudflare R2** | Original CV file storage (S3-compatible, 10 GB free tier)     |
 | **OpenRouter**    | AI provider — `openai/gpt-4o-mini` for extraction and scoring |
-| **Postmark**      | Inbound email → webhook delivery                              |
+| **Mailgun**       | Inbound email → webhook delivery                              |
 
 ## Testing Webhooks Locally
 
 ```bash
 npm run ngrok
 # Prints an HTTPS public URL, e.g. https://abc123.ngrok.io
-# Configure Postmark:
-#   Dashboard → Inbound → Webhook URL:
-#   https://postmark:<POSTMARK_WEBHOOK_TOKEN>@abc123.ngrok.io/api/webhooks/email
+# Configure Mailgun:
+#   Dashboard → Receiving → Routes → forward to:
+#   https://abc123.ngrok.io/api/webhooks/email
+# (No credentials in the URL — Mailgun signs each request; the guard verifies it
+#  against MAILGUN_WEBHOOK_SIGNING_KEY.)
 ```
 
-The ngrok URL changes on every restart — update Postmark each session.
+The ngrok URL changes on every restart — update the Mailgun route each session.
 
 ## Troubleshooting
 
@@ -167,7 +169,7 @@ The ngrok URL changes on every restart — update Postmark each session.
 | Services won't start                        | Check `.env` has `POSTGRES_PASSWORD` set. Run `npm run docker:logs` to see postgres startup errors. |
 | Migrations fail: "Database does not exist"  | Run `npm run docker:down` then `npm run docker:up:build` to reset containers.                       |
 | `TENANT_ID not found` at startup            | Run `npm run db:seed` to create the default tenant. Copy the UUID printed to `.env`.                |
-| Postmark webhook returns 401                | `POSTMARK_WEBHOOK_TOKEN` in `.env` must match the token in Postmark Dashboard → Inbound → Settings. |
+| Mailgun webhook returns 401                 | `MAILGUN_WEBHOOK_SIGNING_KEY` in `.env` must match the key in Mailgun Dashboard → Webhooks → HTTP webhook signing key. |
 | CV processing fails silently                | Check worker logs: `npm run docker:logs:worker`. Look for `Job failed` lines.                       |
 | Port 3000 already in use                    | Set `PORT=3001` in `.env` or stop the conflicting process: `lsof -i :3000`.                         |
 | Docker build fails: `prisma generate` error | Stale node_modules volume — run `npm run docker:down` then `npm run docker:up:build`.               |

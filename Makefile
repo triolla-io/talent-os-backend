@@ -16,7 +16,7 @@ help:
 	@echo "  make test                  Run unit tests inside Docker (matches CI environment)"
 	@echo "  make backup                Dump DB to ./backups/YYYY-MM-DD_HH-MM.sql.gz"
 	@echo "  make restore BACKUP=path   Restore DB from a dump file"
-	@echo "  make ngrok                 Start ngrok tunnel for Postmark webhook testing"
+	@echo "  make ngrok                 Start ngrok tunnel for Mailgun webhook testing"
 	@echo ""
 
 # D-01: Start dev environment, wait for DB healthy, run migrations
@@ -69,7 +69,7 @@ endif
 	gunzip -c $(BACKUP) | docker compose -f docker-compose.dev.yml exec -T postgres psql -U triolla triolla
 	@echo "Database restored from $(BACKUP)"
 
-# D-29: Postmark webhook tunnel for local development
+# D-29: Mailgun webhook tunnel for local development
 ngrok:
 	./scripts/ngrok-webhook.sh
 

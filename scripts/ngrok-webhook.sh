@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ngrok-webhook.sh — Start ngrok tunnel for local Postmark webhook testing
+# ngrok-webhook.sh — Start ngrok tunnel for local Mailgun webhook testing
 #
 # Usage:
 #   ./scripts/ngrok-webhook.sh
@@ -8,13 +8,14 @@
 # Prerequisites:
 #   - ngrok installed and authenticated (ngrok config add-authtoken <token>)
 #   - Local API running on port 3000 (run 'make up' first)
-#   - POSTMARK_WEBHOOK_TOKEN in .env (used by PostmarkAuthGuard)
+#   - MAILGUN_WEBHOOK_SIGNING_KEY in .env (used by MailgunAuthGuard to verify the HMAC signature)
 #
 # What this does:
 #   Opens an HTTPS tunnel to localhost:3000, prints the public URL.
-#   Configure Postmark Inbound Webhook to point to: <ngrok-url>/api/webhooks/email
+#   Point a Mailgun route at: <ngrok-url>/api/webhooks/email
+#   (No credentials in the URL — Mailgun signs each request.)
 #
-# NOTE: ngrok URL changes on each restart. Update Postmark webhook URL each session.
+# NOTE: ngrok URL changes on each restart. Update the Mailgun route each session.
 set -euo pipefail
 
 PORT=${PORT:-3000}
@@ -50,29 +51,19 @@ if [ -z "$TUNNEL_URL" ]; then
   exit 1
 fi
 
-# Attempt to read POSTMARK_WEBHOOK_TOKEN from .env file
-POSTMARK_TOKEN=""
-if [ -f .env ]; then
-  POSTMARK_TOKEN=$(grep -E "^POSTMARK_WEBHOOK_TOKEN=" .env | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-fi
-
-if [ -n "$POSTMARK_TOKEN" ]; then
-  # Inject Basic Auth credentials natively into the URL (https://username:password@domain.com)
-  WEBHOOK_URL=$(echo "$TUNNEL_URL" | sed "s|https://|https://postmark:${POSTMARK_TOKEN}@|")"${WEBHOOK_PATH}"
-else
-  WEBHOOK_URL="${TUNNEL_URL}${WEBHOOK_PATH}"
-fi
+# Mailgun signs each request (HMAC-SHA256), so no credentials go in the URL.
+WEBHOOK_URL="${TUNNEL_URL}${WEBHOOK_PATH}"
 
 echo ""
 echo "=========================================="
 echo "  ngrok tunnel active"
 echo "=========================================="
 echo ""
-echo "  Postmark webhook URL:"
+echo "  Mailgun webhook URL:"
 echo "  $WEBHOOK_URL"
 echo ""
-echo "  Configure in Postmark:"
-echo "  Settings -> Inbound -> Webhook URL -> paste the above"
+echo "  Configure in Mailgun:"
+echo "  Receiving -> Routes -> Forward -> paste the above"
 echo ""
 echo "  Press Ctrl+C to stop the tunnel"
 echo "=========================================="
