@@ -222,8 +222,13 @@ export class IngestionProcessor extends WorkerHost {
     } else {
       try {
         await this.prisma.$transaction(async (tx) => {
-          // Advisory lock: serialize concurrent workers processing the same phone
-          // Lock is automatically released when the transaction commits/rollbacks
+          // Advisory locks: serialize concurrent workers processing the same email or phone so
+          // the dedup check below sees committed rows. The email lock prevents two same-email
+          // submissions from both passing the dedup check and racing to INSERT (which would
+          // violate the unique email index). Locks release automatically on commit/rollback.
+          if (extraction!.email?.trim()) {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${extraction!.email.trim()}))`;
+          }
           if (extraction!.phone?.trim()) {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${extraction!.phone}))`;
           }
@@ -237,7 +242,14 @@ export class IngestionProcessor extends WorkerHost {
             throw err; // Transaction will rollback
           }
 
-          if (dedupResult === null) {
+          if (dedupResult?.fields.includes('email')) {
+            // Email match — this person already exists in the tenant (one email per tenant is
+            // enforced by the DB). Reuse the existing candidate instead of inserting a duplicate
+            // row (which would violate the unique index and drop the candidate). Phase 7 then
+            // enriches/refreshes that row with the latest CV data. Must come BEFORE the
+            // confidence === 1.0 branch, since an email match also has confidence 1.0.
+            candidateId = dedupResult.match!.id;
+          } else if (dedupResult === null) {
             // No phone match — new candidate, proceed normally
             candidateId = await this.dedupService.insertCandidate(
               extraction!,

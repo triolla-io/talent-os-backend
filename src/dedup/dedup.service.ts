@@ -19,6 +19,22 @@ export class DedupService {
     tx?: Prisma.TransactionClient,
   ): Promise<DedupResult | null> {
     const client = tx ?? this.prisma;
+
+    // Step 0: Email is the strongest identity key, and the DB enforces one email per tenant
+    // (partial unique index idx_candidates_tenant_email_unique). If a candidate with this exact
+    // email already exists, it is the same person — return it so the caller REUSES that row.
+    // Without this, every branch below ends in an INSERT that violates the unique index and the
+    // candidate is silently dropped (the "candidate not saved" bug). Matched exact, like the index.
+    if (candidate.email && candidate.email.trim() !== '') {
+      const emailMatch = await client.candidate.findFirst({
+        where: { tenantId, email: candidate.email },
+        select: { id: true },
+      });
+      if (emailMatch) {
+        return { match: { id: emailMatch.id }, confidence: 1.0, fields: ['email'] };
+      }
+    }
+
     // Step 1: No phone — return sentinel so processor can create phone_missing flag for HR review
     if (!candidate.phone || candidate.phone.trim() === '') {
       return { match: null, confidence: 0, fields: ['phone_missing'] };

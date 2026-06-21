@@ -518,6 +518,66 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
+  // 6-02-04: email match → REUSE existing candidate (no INSERT). This is the fix for the
+  // "candidate not saved" bug: the email already exists in the tenant, so we reuse that row
+  // instead of inserting (which violated idx_candidates_tenant_email_unique and dropped it).
+  it('6-02-04: email match — reuses existing candidate, no insertCandidate, enriches existing row', async () => {
+    dedupService.check.mockResolvedValue({
+      match: { id: 'existing-by-email' },
+      confidence: 1.0,
+      fields: ['email'],
+    });
+
+    const payload = validJobPayload();
+    storageService.downloadPayload.mockResolvedValue(payload);
+    const job = makeJob('test-dedup-email', payload);
+    await processor.process(job);
+
+    // No new row — the existing candidate is reused (honors the unique email index)
+    expect(dedupService.insertCandidate).not.toHaveBeenCalled();
+    expect(dedupService.upsertCandidate).not.toHaveBeenCalled();
+    // Phase 7 enrichment runs against the EXISTING candidate id
+    expect(prisma.candidate.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'existing-by-email' } }),
+    );
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  // 6-02-05: race safety — when an email is present we take a per-email advisory lock inside
+  // the Phase 6 transaction (so two same-email emails can't both INSERT). Test with phone=null
+  // so the ONLY advisory lock that can fire is the email one.
+  it('6-02-05: email present acquires an advisory lock even when phone is null', async () => {
+    const txExecuteRaw = jest.fn().mockResolvedValue(0);
+    const txClient = {
+      emailIntakeLog: { update: jest.fn().mockResolvedValue({}) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: txExecuteRaw,
+    };
+    prisma.$transaction.mockImplementationOnce(async (cb: (tx: typeof txClient) => Promise<void>) => cb(txClient));
+
+    extractionAgent.extract.mockResolvedValue({
+      full_name: 'Jane Doe',
+      email: 'jane.doe@example.com',
+      phone: null,
+      current_role: null,
+      years_experience: null,
+      location: null,
+      skills: [],
+      ai_summary: null,
+      source_hint: null,
+      source_agency: null,
+    });
+    dedupService.check.mockResolvedValue({ match: { id: 'existing-by-email' }, confidence: 1.0, fields: ['email'] });
+
+    const payload = validJobPayload();
+    storageService.downloadPayload.mockResolvedValue(payload);
+    const job = makeJob('test-email-lock', payload);
+    await processor.process(job);
+
+    // Advisory lock was acquired inside the transaction (race guard for same-email inserts)
+    expect(txExecuteRaw).toHaveBeenCalled();
+  });
+
   // Phase 6 atomicity: if emailIntakeLog.update throws inside transaction, insertCandidate is rolled back
   it('Phase 6 atomicity: if emailIntakeLog.update throws inside transaction, candidate INSERT is rolled back', async () => {
     dedupService.check.mockResolvedValue(null);

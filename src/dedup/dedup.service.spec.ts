@@ -28,6 +28,7 @@ describe('DedupService', () => {
       create: jest.Mock;
       update: jest.Mock;
       upsert: jest.Mock;
+      findFirst: jest.Mock;
     };
     duplicateFlag: { upsert: jest.Mock };
     $queryRaw: jest.Mock;
@@ -39,6 +40,7 @@ describe('DedupService', () => {
         create: jest.fn().mockResolvedValue({ id: 'new-candidate-id' }),
         update: jest.fn().mockResolvedValue({}),
         upsert: jest.fn().mockResolvedValue({ id: 'upserted-id' }),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       duplicateFlag: {
         upsert: jest.fn().mockResolvedValue({}),
@@ -93,6 +95,34 @@ describe('DedupService', () => {
 
     expect(result).toBeNull();
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  // DEDUP-06: email already exists in tenant → returns email match so caller REUSES the row.
+  // Email is the strongest key and the DB enforces one email per tenant; this prevents the
+  // INSERT that would violate idx_candidates_tenant_email_unique and drop the candidate.
+  it('DEDUP-06: existing email returns { match, confidence 1.0, fields: ["email"] } and skips phone query', async () => {
+    prisma.candidate.findFirst.mockResolvedValue({ id: 'existing-by-email' });
+    const extract = mockCandidateDedupExtract({ email: 'jane.doe@example.com', phone: '+1-555-0100' });
+
+    const result = await service.check(extract, 'tenant-abc');
+
+    expect(result).toEqual({ match: { id: 'existing-by-email' }, confidence: 1.0, fields: ['email'] });
+    expect(prisma.candidate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 'tenant-abc', email: 'jane.doe@example.com' } }),
+    );
+    // email match short-circuits — phone lookup never runs
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  // DEDUP-07: null email → skip the email lookup entirely, fall through to phone logic.
+  it('DEDUP-07: null email skips email lookup and uses phone match', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ id: 'phone-match-id' }]);
+    const extract = mockCandidateDedupExtract({ email: null, phone: '+1-555-0100' });
+
+    const result = await service.check(extract, 'tenant-abc');
+
+    expect(prisma.candidate.findFirst).not.toHaveBeenCalled();
+    expect(result).toEqual({ match: { id: 'phone-match-id' }, confidence: 1.0, fields: ['phone'] });
   });
 
   // DEDUP-04: createFlag with fields=['phone_missing'] and matchedCandidateId=null self-references candidateId
