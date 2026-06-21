@@ -19,7 +19,7 @@ export class JwtService {
     this.secret = new TextEncoder().encode(raw);
   }
 
-  async sign(payload: JwtPayload, expiresIn = '15m'): Promise<string> {
+  sign(payload: JwtPayload, expiresIn = '15m'): Promise<string> {
     return new SignJWT(payload as unknown as Record<string, unknown>)
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()

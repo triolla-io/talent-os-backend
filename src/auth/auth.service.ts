@@ -206,9 +206,26 @@ export class AuthService {
     session: JwtPayload,
     orgName: string,
     logoFile?: Express.Multer.File,
-  ): Promise<{ success: true }> {
+  ): Promise<{ success: true } | { error: { code: string; message: string } }> {
+    // Input validation lives here (moved out of the controller — handlers stay logic-free).
+    const trimmedOrgName = orgName?.trim();
+    if (!trimmedOrgName) {
+      return { error: { code: 'VALIDATION_ERROR', message: 'org_name is required' } };
+    }
+
+    if (logoFile) {
+      // WR-01: validate logo MIME type and size before uploading
+      const ALLOWED_LOGO_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+      const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB
+      if (!ALLOWED_LOGO_MIMES.includes(logoFile.mimetype)) {
+        return { error: { code: 'INVALID_FILE_TYPE', message: 'Logo must be PNG, JPEG, WebP, or SVG' } };
+      }
+      if (logoFile.size > MAX_LOGO_BYTES) {
+        return { error: { code: 'FILE_TOO_LARGE', message: 'Logo must be under 2 MB' } };
+      }
+    }
+
     const org = await this.prisma.organization.findUnique({ where: { id: session.org } });
-    
     if (!org) {
       throw new UnauthorizedException('Session organization no longer exists');
     }
@@ -229,7 +246,7 @@ export class AuthService {
     await this.prisma.organization.update({
       where: { id: session.org },
       data: {
-        name: orgName,
+        name: trimmedOrgName,
         onboardingCompletedAt: new Date(),
         ...(logoUrl !== undefined ? { logoUrl } : {}),
       },

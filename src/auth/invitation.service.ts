@@ -52,6 +52,44 @@ export class InvitationService {
     return { userId };
   }
 
+  /**
+   * D-07: Full magic-link verification + session creation.
+   * Wraps {@link verifyMagicLink} (token lookup) and adds the user fetch, auth-provider
+   * backfill, and JWT signing that previously lived in the controller. Returns a discriminated
+   * result so the controller can set the cookie / emit the right 404 without business logic.
+   */
+  async verifyMagicLinkSession(
+    token: string,
+  ): Promise<
+    { ok: true; sessionToken: string } | { ok: false; status: number; code: string; message: string }
+  > {
+    if (!token) {
+      return { ok: false, status: 404, code: 'NOT_FOUND', message: 'Token is required' };
+    }
+
+    const result = await this.verifyMagicLink(token);
+    // WR-04: 'not_found' covers both TTL-expired and never-existed (Redis gives no distinction)
+    if (result === 'not_found') {
+      return { ok: false, status: 404, code: 'NOT_FOUND', message: 'Invalid or expired magic link' };
+    }
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: result.userId } });
+
+    // Run DB update and JWT signing concurrently — JWT only needs fields already fetched
+    const [, sessionToken] = await Promise.all([
+      user.authProvider !== 'magic_link'
+        ? this.prisma.user.update({ where: { id: user.id }, data: { authProvider: 'magic_link' } })
+        : Promise.resolve(null),
+      this.jwtService.signRefreshToken({
+        sub: user.id,
+        org: user.organizationId,
+        role: user.role as JwtPayload['role'],
+      }),
+    ]);
+
+    return { ok: true, sessionToken };
+  }
+
   /** Validate invitation token — returns details for confirmation page */
   async validateInvite(token: string): Promise<{ org_name: string; role: string; email: string }> {
     const invitation = await this.prisma.invitation.findUnique({
