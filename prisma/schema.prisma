@@ -33,7 +33,7 @@ model Organization {
   // Relations — v2.0 relations
   users       User[]
   invitations Invitation[]
-  createdBy   User?        @relation("OrgCreator", fields: [createdByUserId], references: [id])
+  createdBy   User?        @relation("OrgCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   // Relations — pm-bridge
   pmProductDecisions PmProductDecision[]
@@ -56,7 +56,7 @@ model User {
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  organization        Organization  @relation(fields: [organizationId], references: [id])
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   createdOrganization Organization? @relation("OrgCreator")
   sentInvitations     Invitation[]  @relation("InvitedBy")
 
@@ -79,8 +79,8 @@ model Invitation {
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  organization Organization @relation(fields: [organizationId], references: [id])
-  invitedBy    User         @relation("InvitedBy", fields: [invitedByUserId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invitedBy    User         @relation("InvitedBy", fields: [invitedByUserId], references: [id], onDelete: Restrict)
 
   // D-14: composite index for "does a pending invitation exist for this email in this org?" query
   @@index([organizationId, email, status], name: "idx_invitations_org_email_status")
@@ -115,7 +115,7 @@ model Job {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant             Organization        @relation(fields: [tenantId], references: [id])
+  tenant             Organization        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   candidates         Candidate[]
   applications       Application[]
   hiringStages       JobStage[]
@@ -157,7 +157,7 @@ model Candidate {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant                  Organization            @relation(fields: [tenantId], references: [id])
+  tenant                  Organization            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   job                     Job?                    @relation(fields: [jobId], references: [id], onDelete: SetNull)
   hiringStage             JobStage?               @relation("CandidateHiringStage", fields: [hiringStageId], references: [id], onDelete: SetNull)
   applications            Application[]
@@ -189,11 +189,11 @@ model Application {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant    Organization        @relation(fields: [tenantId], references: [id])
+  tenant    Organization        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   candidate Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job       Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  intakeLog EmailIntakeLog?     @relation(fields: [intakeLogId], references: [id])
-  jobStage  JobStage?           @relation(fields: [jobStageId], references: [id])
+  intakeLog EmailIntakeLog?     @relation(fields: [intakeLogId], references: [id], onDelete: SetNull)
+  jobStage  JobStage?           @relation(fields: [jobStageId], references: [id], onDelete: SetNull)
   scores    CandidateJobScore[]
 
   // DB-06: unique application per candidate per job per tenant
@@ -218,7 +218,7 @@ model CandidateJobScore {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant      Organization @relation(fields: [tenantId], references: [id])
+  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   application Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId], name: "idx_scores_application")
@@ -239,7 +239,7 @@ model DuplicateFlag {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant           Organization @relation(fields: [tenantId], references: [id])
+  tenant           Organization @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   candidate        Candidate    @relation("CandidateFlags", fields: [candidateId], references: [id], onDelete: Restrict)
   matchedCandidate Candidate    @relation("MatchedCandidateFlags", fields: [matchedCandidateId], references: [id], onDelete: Restrict)
 
@@ -266,8 +266,8 @@ model EmailIntakeLog {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant       Organization   @relation(fields: [tenantId], references: [id])
-  candidate    Candidate?     @relation(fields: [candidateId], references: [id])
+  tenant       Organization   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  candidate    Candidate?     @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   applications Application[]
 
   // DB-08: unique message_id per tenant — primary idempotency guard
@@ -291,7 +291,7 @@ model JobStage {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant                  Organization            @relation(fields: [tenantId], references: [id])
+  tenant                  Organization            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   job                     Job                     @relation(fields: [jobId], references: [id], onDelete: Cascade)
   applications            Application[]
   candidates              Candidate[]             @relation("CandidateHiringStage")
@@ -317,7 +317,7 @@ model ScreeningQuestion {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant Organization @relation(fields: [tenantId], references: [id])
+  tenant Organization @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   job    Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId], name: "idx_screening_questions_job")
@@ -337,7 +337,7 @@ model PmProductDecision {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  organization Organization @relation(fields: [tenantId], references: [id])
+  organization Organization @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, status], name: "idx_pm_decisions_tenant_status")
   @@map("pm_product_decisions")
@@ -355,7 +355,7 @@ model CandidateStageSummary {
 
   // Relations
   // relation field name kept as 'tenant' intentionally — see D-31 in 18-CONTEXT.md
-  tenant    Organization @relation(fields: [tenantId], references: [id])
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   candidate Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   jobStage  JobStage     @relation(fields: [jobStageId], references: [id], onDelete: Cascade)
 
