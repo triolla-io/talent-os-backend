@@ -14,7 +14,6 @@ export function mockCandidateExtract(
     ai_summary: 'Experienced engineer with 7 years building TypeScript backends. Strong in distributed systems and database design.',
     source_hint: 'direct',
     source_agency: null,
-    suspicious: false,
     ...overrides,
   };
 }

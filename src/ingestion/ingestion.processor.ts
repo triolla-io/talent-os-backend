@@ -13,7 +13,6 @@ import { ScoringAgentService, ScoringInput } from '../scoring/scoring.service';
 
 export interface ProcessingContext {
   fullText: string;
-  suspicious: boolean;
   fileKey: string | null; // R2 object key (D-04) or null if no CV attachment found
   cvText: string; // Phase 3 extracted text — written to candidates.cv_text in Phase 7
   candidateId: string; // Phase 6 output — set immediately after INSERT/UPSERT; consumed by Phase 7
@@ -169,7 +168,6 @@ export class IngestionProcessor extends WorkerHost {
     // Phase 3 output — passed to Phase 4 inline
     const context: ProcessingContext = {
       fullText,
-      suspicious: filterResult.suspicious,
       fileKey: existingIntake?.cvFileKey ?? null, // set by webhook (P1)
       cvText: fullText,
       candidateId: '',
@@ -178,7 +176,7 @@ export class IngestionProcessor extends WorkerHost {
     // Phase 4: AI extraction — passes metadata for context (Phase 14: metadata enables source_hint detection)
     let extraction: CandidateExtract;
     try {
-      extraction = await this.extractionAgent.extract(context.fullText, context.suspicious, {
+      extraction = await this.extractionAgent.extract(context.fullText, {
         subject: payload.Subject ?? '',
         fromEmail: payload.From,
         tenantId,

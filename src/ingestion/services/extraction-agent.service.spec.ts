@@ -150,8 +150,8 @@ describe('ExtractionAgentService', () => {
     expect(parsed.skills).toEqual([]);
   });
 
-  // When generateObject resolves, returns AI result merged with suspicious flag
-  it('returns AI result merged with suspicious flag on success', async () => {
+  // When generateObject resolves, returns the AI result
+  it('returns AI result on success', async () => {
     const aiResult = {
       full_name: 'Alice Smith',
       email: 'alice@example.com',
@@ -168,31 +168,10 @@ describe('ExtractionAgentService', () => {
     mockGenerateObject.mockResolvedValueOnce({ object: aiResult } as any);
 
     const service = makeService();
-    const result = await service.extract('some cv text', false, DEFAULT_METADATA);
+    const result = await service.extract('some cv text', DEFAULT_METADATA);
 
     expect(result.full_name).toBe('Alice Smith');
     expect(result.email).toBe('alice@example.com');
-    expect(result.suspicious).toBe(false);
-  });
-
-  // suspicious=true is propagated on success
-  it('propagates suspicious=true from input on success', async () => {
-    mockGenerateObject.mockResolvedValueOnce({ object: {
-      full_name: 'Bob Jones',
-      email: null,
-      phone: null,
-      current_role: null,
-      years_experience: null,
-      location: null,
-      skills: [],
-      ai_summary: null,
-      source_hint: null,
-      source_agency: null,
-    } } as any);
-
-    const service = makeService();
-    const result = await service.extract('some text', true, DEFAULT_METADATA);
-    expect(result.suspicious).toBe(true);
   });
 
   // extract() THROWS when callAI() throws — does NOT return fallback
@@ -200,7 +179,7 @@ describe('ExtractionAgentService', () => {
     mockGenerateObject.mockRejectedValueOnce(new Error('Network timeout'));
 
     const service = makeService();
-    await expect(service.extract('some text', false, DEFAULT_METADATA)).rejects.toThrow('Network timeout');
+    await expect(service.extract('some text', DEFAULT_METADATA)).rejects.toThrow('Network timeout');
   });
 
   // callAI() constructs prompt with Email Metadata section
@@ -220,7 +199,7 @@ describe('ExtractionAgentService', () => {
     mockGenerateObject.mockResolvedValueOnce({ object: aiResult } as any);
 
     const service = makeService();
-    await service.extract('cv text here', false, { subject: 'My CV', fromEmail: 'dana@example.com', tenantId: 'tid', messageId: 'mid' });
+    await service.extract('cv text here', { subject: 'My CV', fromEmail: 'dana@example.com', tenantId: 'tid', messageId: 'mid' });
 
     expect(mockGenerateObject).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -257,9 +236,9 @@ describe('ExtractionAgentService', () => {
     mockGenerateObject.mockResolvedValueOnce({ object: expectedResult } as any);
 
     const service = makeService();
-    const result = await service.extract('cv text', false, DEFAULT_METADATA);
+    const result = await service.extract('cv text', DEFAULT_METADATA);
 
-    expect(result).toMatchObject({ ...expectedResult, suspicious: false });
+    expect(result).toMatchObject(expectedResult);
     expect(mockGenerateObject).toHaveBeenCalledTimes(1);
   });
 
@@ -277,7 +256,7 @@ describe('ExtractionAgentService', () => {
     };
     const service = makeService(mockStorage);
 
-    const result = await service.extract('cv text', false, DEFAULT_METADATA);
+    const result = await service.extract('cv text', DEFAULT_METADATA);
 
     expect(result.full_name).toBe('Cached Name');
     expect(mockGenerateObject).not.toHaveBeenCalled();
@@ -298,7 +277,7 @@ describe('ExtractionAgentService', () => {
     };
     const service = makeService(mockStorage);
 
-    await service.extract('cv text', false, DEFAULT_METADATA);
+    await service.extract('cv text', DEFAULT_METADATA);
 
     expect(mockStorage.saveExtractionCache).toHaveBeenCalledWith(
       expect.objectContaining({ full_name: 'New Candidate' }),
@@ -322,7 +301,7 @@ describe('ExtractionAgentService', () => {
     };
     const service = makeService(mockStorage);
 
-    const result = await service.extract('cv text', false, DEFAULT_METADATA);
+    const result = await service.extract('cv text', DEFAULT_METADATA);
     expect(result.full_name).toBe('New Candidate');
     expect(mockGenerateObject).toHaveBeenCalledTimes(1);
   });
@@ -375,7 +354,7 @@ describe('ExtractionAgentService - context limits', () => {
     mockGenerateObject.mockResolvedValueOnce({ object: aiResult } as any);
     const service = makeService();
     const longText = 'a'.repeat(100_000);
-    await expect(service.extract(longText, false, { subject: 'Test', fromEmail: 'a@b.com', tenantId: 'tid', messageId: 'mid' })).resolves.toBeDefined();
+    await expect(service.extract(longText, { subject: 'Test', fromEmail: 'a@b.com', tenantId: 'tid', messageId: 'mid' })).resolves.toBeDefined();
   });
 });
 
@@ -401,7 +380,7 @@ describe('ExtractionAgentService - known agency domain resolution (Issue 3)', ()
   it('overrides source_agency with canonical "jobhunt" for jobhunt.co.il sender', async () => {
     mockGenerateObject.mockResolvedValueOnce({ object: agencyAiResult } as any);
     const service = makeService();
-    const result = await service.extract('cv text', false, {
+    const result = await service.extract('cv text', {
       subject: 'Presenting candidate',
       fromEmail: 'talent@jobhunt.co.il',
       tenantId: 'tid',
@@ -415,7 +394,7 @@ describe('ExtractionAgentService - known agency domain resolution (Issue 3)', ()
   it('overrides source_agency with canonical "AllJobs" for alljob.co.il sender', async () => {
     mockGenerateObject.mockResolvedValueOnce({ object: { ...agencyAiResult, source_agency: 'AllJobs' } } as any);
     const service = makeService();
-    const result = await service.extract('cv text', false, {
+    const result = await service.extract('cv text', {
       subject: 'New candidate',
       fromEmail: 'alljobs@alljob.co.il',
       tenantId: 'tid',
@@ -429,7 +408,7 @@ describe('ExtractionAgentService - known agency domain resolution (Issue 3)', ()
   it('preserves AI source_agency for unknown domain', async () => {
     mockGenerateObject.mockResolvedValueOnce({ object: { ...agencyAiResult, source_agency: 'Recruiters Inc' } } as any);
     const service = makeService();
-    const result = await service.extract('cv text', false, {
+    const result = await service.extract('cv text', {
       subject: 'Candidate for your role',
       fromEmail: 'hr@someagency.com',
       tenantId: 'tid',
@@ -442,7 +421,7 @@ describe('ExtractionAgentService - known agency domain resolution (Issue 3)', ()
   it('injects "Resolved Agency Name" into prompt for known domains', async () => {
     mockGenerateObject.mockResolvedValueOnce({ object: agencyAiResult } as any);
     const service = makeService();
-    await service.extract('cv text', false, {
+    await service.extract('cv text', {
       subject: 'Presenting candidate',
       fromEmail: 'talent@jobhunt.co.il',
       tenantId: 'tid',
@@ -459,7 +438,7 @@ describe('ExtractionAgentService - known agency domain resolution (Issue 3)', ()
   it('does NOT inject "Resolved Agency Name" for unknown domain', async () => {
     mockGenerateObject.mockResolvedValueOnce({ object: agencyAiResult } as any);
     const service = makeService();
-    await service.extract('cv text', false, {
+    await service.extract('cv text', {
       subject: 'Candidate',
       fromEmail: 'hr@unknownagency.com',
       tenantId: 'tid',
@@ -483,7 +462,7 @@ describe('ExtractionAgentService - location prompt instruction (Issue 1)', () =>
       source_hint: null, source_agency: null,
     } } as any);
     const service = makeService();
-    await service.extract('cv', false, { subject: 'S', fromEmail: 'a@b.com', tenantId: 'tid', messageId: 'mid' });
+    await service.extract('cv', { subject: 'S', fromEmail: 'a@b.com', tenantId: 'tid', messageId: 'mid' });
     const callArg = mockGenerateObject.mock.calls[0][0];
     expect(callArg.system).toContain('HOME location');
     expect(callArg.system).toContain('Phone country prefix');

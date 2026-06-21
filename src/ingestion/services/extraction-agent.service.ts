@@ -18,9 +18,7 @@ export const CandidateExtractSchema = z.object({
   source_agency: z.string().nullable(),
 });
 
-export type CandidateExtract = z.infer<typeof CandidateExtractSchema> & {
-  suspicious: boolean;
-};
+export type CandidateExtract = z.infer<typeof CandidateExtractSchema>;
 
 /**
  * Known agency domain → canonical name map.
@@ -177,13 +175,12 @@ export class ExtractionAgentService {
     this.extractionModel = config.get<string>('EXTRACTION_MODEL') ?? 'openai/gpt-4o-mini';
   }
 
-  async extract(fullText: string, suspicious: boolean, metadata: ExtractionMetadata): Promise<CandidateExtract> {
+  async extract(fullText: string, metadata: ExtractionMetadata): Promise<CandidateExtract> {
     // Check R2 cache first — avoid re-calling AI on retry
     const cached = await this.storageService.loadExtractionCache(metadata.tenantId, metadata.messageId);
     if (cached !== null) {
       this.logger.log(`Extraction cache hit for ${metadata.messageId}`);
-      const parsed = CandidateExtractSchema.parse(cached);
-      return { ...parsed, suspicious };
+      return CandidateExtractSchema.parse(cached);
     }
 
     const extracted = await this.callAI(fullText, metadata);
@@ -194,10 +191,10 @@ export class ExtractionAgentService {
       this.logger.warn(`Failed to cache extraction for ${metadata.messageId} — retry will re-call AI: ${(cacheErr as Error).message}`);
     }
 
-    return { ...extracted, suspicious };
+    return extracted;
   }
 
-  private async callAI(fullText: string, metadata: ExtractionMetadata): Promise<Omit<CandidateExtract, 'suspicious'>> {
+  private async callAI(fullText: string, metadata: ExtractionMetadata): Promise<CandidateExtract> {
     const MAX_INPUT_LENGTH = 20_000;
     const safeFullText = fullText.substring(0, MAX_INPUT_LENGTH);
 
