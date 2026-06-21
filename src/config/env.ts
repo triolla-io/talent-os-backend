@@ -23,6 +23,7 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   EXTRACTION_MODEL: z.string().default('openai/gpt-4o-mini'),
   SCORING_MODEL: z.string().default('openai/gpt-4o-mini'),
+  CLASSIFIER_MODEL: z.string().default('openai/gpt-4o-mini'),
   // PM Bridge — Jira integration.
   // Optional in this shared/base schema so the BullMQ worker (which never calls Jira) can boot
   // without these. The API process re-requires JIRA_BASE_URL/EMAIL/API_TOKEN via apiEnvSchema.
