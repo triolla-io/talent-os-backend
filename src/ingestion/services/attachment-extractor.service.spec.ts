@@ -105,4 +105,25 @@ describe('AttachmentExtractorService', () => {
     // Both sections present in one merged string
     expect(result.indexOf('cv.pdf')).toBeLessThan(result.indexOf('cover.docx'));
   });
+
+  // BUG-CV-NULLBYTE: pdf-parse can emit NUL (U+0000) bytes that Postgres text columns
+  // reject. The extractor must strip them at the source so cv_text can be persisted.
+  it('strips NUL bytes from extracted PDF text', async () => {
+    const NUL = String.fromCharCode(0);
+    const { PDFParse } = require('pdf-parse');
+    PDFParse.mockImplementationOnce(() => ({
+      getText: jest.fn().mockResolvedValue({ text: `Daniel${NUL}Amar${NUL}` }),
+    }));
+
+    const att: EmailAttachmentDto = {
+      Name: 'cv.pdf',
+      ContentType: 'application/pdf',
+      Content: mockBase64Pdf(),
+      ContentLength: 100,
+    };
+    const result = await service.extract([att]);
+
+    expect(result).toContain('DanielAmar');
+    expect(result.includes(NUL)).toBe(false);
+  });
 });

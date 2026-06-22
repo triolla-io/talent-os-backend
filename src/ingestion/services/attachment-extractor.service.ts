@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import { EmailAttachmentDto } from '../../webhooks';
+import { sanitizePgText } from '../../common/sanitize-pg-text';
 
 const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -45,6 +46,10 @@ export class AttachmentExtractorService {
           );
           continue;
         }
+
+        // Strip NUL bytes / lone surrogates at the source — Postgres text columns
+        // reject them, and this text flows into candidates.cv_text (Phase 7).
+        text = sanitizePgText(text);
 
         if (text.trim()) {
           // D-02: demarcate each file

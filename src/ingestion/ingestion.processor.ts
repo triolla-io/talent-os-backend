@@ -11,6 +11,7 @@ import { CvClassifierService, CvClassification } from './services/cv-classifier.
 import { StorageService } from '../storage/storage.service';
 import { DedupService, DedupResult } from '../dedup/dedup.service';
 import { ScoringAgentService, ScoringInput } from '../scoring/scoring.service';
+import { sanitizePgText } from '../common/sanitize-pg-text';
 
 export interface ProcessingContext {
   fullText: string;
@@ -106,7 +107,10 @@ export class IngestionProcessor extends WorkerHost {
     // Build fullText: email body first, then attachment sections (D-02)
     const bodySection = payload.TextBody?.trim() ? `--- Email Body ---\n${payload.TextBody.trim()}` : '';
 
-    const fullText = [bodySection, attachmentText].filter(Boolean).join('\n\n');
+    // Defense in depth: sanitize the combined text once more here. The attachment extractor
+    // already strips NUL/lone-surrogates at the source, but the email body can carry them too,
+    // and this fullText is what becomes candidates.cv_text (a Postgres text column) in Phase 7.
+    const fullText = sanitizePgText([bodySection, attachmentText].filter(Boolean).join('\n\n'));
 
     // CV CLASSIFICATION GATE — decide whether this email is a job application
     // BEFORE any candidate is created. Runs after fullText is built (so attachment
@@ -341,58 +345,74 @@ export class IngestionProcessor extends WorkerHost {
       hiringStages: { id: string }[];
     }> = [];
 
-    if (matchedShortIds.length > 0) {
-      // Look up each matched job
-      const jobsData = await this.prisma.job.findMany({
-        where: {
-          tenantId,
-          shortId: { in: matchedShortIds },
-          status: 'open',
-        },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          requirements: true,
-          shortId: true,
-          hiringStages: {
-            where: { isEnabled: true },
-            orderBy: { order: 'asc' },
-            take: 1,
+    // Phase 15 job lookup + Phase 7 enrichment are wrapped so any failure here is RECORDED on
+    // the intake log (status=failed + errorMessage) instead of being swallowed. Previously an
+    // uncaught throw (e.g. a bad char rejected by the cv_text column) left the candidate as a
+    // bare Phase-6 shell with the intake stuck at 'processing' and no error — invisible in logs.
+    try {
+      if (matchedShortIds.length > 0) {
+        // Look up each matched job
+        const jobsData = await this.prisma.job.findMany({
+          where: {
+            tenantId,
+            shortId: { in: matchedShortIds },
+            status: 'open',
           },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            requirements: true,
+            shortId: true,
+            hiringStages: {
+              where: { isEnabled: true },
+              orderBy: { order: 'asc' },
+              take: 1,
+            },
+          },
+        });
+
+        matchedJobs = jobsData;
+
+        if (matchedJobs.length > 0) {
+          this.pinoLogger.log({ messageId: payload.MessageID, count: matchedJobs.length }, 'Phase 15: matched jobs found');
+        }
+      } else {
+        this.pinoLogger.debug({ messageId: payload.MessageID }, 'Phase 15: no matching job short_ids');
+      }
+
+      // For backward compatibility: set jobId/hiringStageId from first match (if any)
+      // Later: Phase 7 will iterate over ALL matched jobs for multi-job scoring
+      const jobId = matchedJobs.length > 0 ? matchedJobs[0].id : null;
+      const hiringStageId = matchedJobs.length > 0 ? matchedJobs[0].hiringStages[0]?.id : null;
+
+      // Phase 7: Candidate enrichment (CAND-01, D-01, D-02, D-03)
+      // ALWAYS enrich candidate fields, even if no job matched
+      await this.prisma.candidate.update({
+        where: { id: context.candidateId },
+        data: {
+          jobId,
+          hiringStageId,
+          currentRole: extraction!.current_role ?? null,
+          yearsExperience: extraction!.years_experience ?? null,
+          location: extraction!.location ?? null,
+          skills: extraction!.skills ?? [],
+          cvText: context.cvText,
+          cvFileUrl: context.fileKey, // R2 object key used as URL placeholder in Phase 1 (D-02)
+          aiSummary: extraction!.ai_summary ?? null,
         },
       });
-
-      matchedJobs = jobsData;
-
-      if (matchedJobs.length > 0) {
-        this.pinoLogger.log({ messageId: payload.MessageID, count: matchedJobs.length }, 'Phase 15: matched jobs found');
-      }
-    } else {
-      this.pinoLogger.debug({ messageId: payload.MessageID }, 'Phase 15: no matching job short_ids');
+    } catch (err) {
+      this.pinoLogger.error(
+        { messageId: payload.MessageID, candidateId: context.candidateId, error: (err as Error).message },
+        'Phase 7 enrichment failed',
+      );
+      await this.prisma.emailIntakeLog.update({
+        where: { idx_intake_message_id: { tenantId, messageId: payload.MessageID } },
+        data: { processingStatus: 'failed', errorMessage: (err as Error).message },
+      });
+      throw err; // Re-throw so BullMQ records the failure (transient errors get retried)
     }
-
-    // For backward compatibility: set jobId/hiringStageId from first match (if any)
-    // Later: Phase 7 will iterate over ALL matched jobs for multi-job scoring
-    const jobId = matchedJobs.length > 0 ? matchedJobs[0].id : null;
-    const hiringStageId = matchedJobs.length > 0 ? matchedJobs[0].hiringStages[0]?.id : null;
-
-    // Phase 7: Candidate enrichment (CAND-01, D-01, D-02, D-03)
-    // ALWAYS enrich candidate fields, even if no job matched
-    await this.prisma.candidate.update({
-      where: { id: context.candidateId },
-      data: {
-        jobId,
-        hiringStageId,
-        currentRole: extraction!.current_role ?? null,
-        yearsExperience: extraction!.years_experience ?? null,
-        location: extraction!.location ?? null,
-        skills: extraction!.skills ?? [],
-        cvText: context.cvText,
-        cvFileUrl: context.fileKey, // R2 object key used as URL placeholder in Phase 1 (D-02)
-        aiSummary: extraction!.ai_summary ?? null,
-      },
-    });
 
     // If no jobs were matched, skip scoring loop
     if (matchedJobs.length === 0) {

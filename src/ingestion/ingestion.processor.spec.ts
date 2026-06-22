@@ -906,6 +906,54 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
     );
   });
 
+  // 7-02-07: BUG-CV-NULLBYTE — text extracted from CVs/bodies can contain a NUL (U+0000)
+  // that Postgres text columns reject. The processor must sanitize fullText so the value
+  // written to candidates.cv_text never contains it (otherwise the enrichment update throws
+  // and the candidate is left as a bare shell with no CV or data).
+  it('7-02-07: BUG-CV-NULLBYTE — strips NUL from extracted text before writing cv_text', async () => {
+    const NUL = String.fromCharCode(0);
+    const payload = mockEmailPayload({
+      MessageID: 'msg-nullbyte',
+      From: 'sender@example.com',
+      Subject: 'Job Application for position 101',
+      TextBody:
+        `Dear Hiring Manager, I have 7 years of TypeScript and Node.js experience.${NUL} ` +
+        'I am very interested in position 101 and would love to discuss my background further. Please find my CV attached.',
+      Attachments: [],
+    });
+    storageService.downloadPayload.mockResolvedValue(payload);
+    const job = makeJob('test-p7-nullbyte', payload);
+    await processor.process(job);
+
+    const cvTextWritten = prisma.candidate.update.mock.calls
+      .map((c: [{ data?: { cvText?: string } }]) => c[0]?.data?.cvText)
+      .find((t: unknown): t is string => typeof t === 'string');
+    expect(cvTextWritten).toBeDefined();
+    expect(cvTextWritten!.includes(NUL)).toBe(false);
+  });
+
+  // 7-02-08: BUG-PHASE7-SILENT — a Phase 7 enrichment failure must be RECORDED on the intake log
+  // (status=failed + errorMessage), not swallowed. Previously the enrichment update was not wrapped,
+  // so a failure left the intake stuck at 'processing' with no error — invisible in monitoring.
+  it('7-02-08: BUG-PHASE7-SILENT — enrichment failure is recorded as failed and rethrown', async () => {
+    prisma.candidate.update.mockRejectedValueOnce(new Error('null character not permitted'));
+
+    const payload = validJobPayload();
+    storageService.downloadPayload.mockResolvedValue(payload);
+    const job = makeJob('test-p7-enrich-fail', payload);
+
+    await expect(processor.process(job)).rejects.toThrow('null character not permitted');
+
+    expect(prisma.emailIntakeLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          processingStatus: 'failed',
+          errorMessage: 'null character not permitted',
+        }),
+      }),
+    );
+  });
+
   describe('IngestionProcessor — Phase 15 Numeric Job ID Extraction', () => {
     let processor: IngestionProcessor;
     let prisma: any;
