@@ -28,6 +28,11 @@ export class EmailService {
       : null;
   }
 
+  /** Generic plain-text send. URLs in the body are auto-linked by mail clients. */
+  async sendText(to: string, subject: string, text: string): Promise<void> {
+    await this.sendOrLog(to, subject, text);
+  }
+
   private async sendOrLog(to: string, subject: string, text: string): Promise<void> {
     if (!this.transport) {
       // D-12: dev fallback — log instead of throw when SMTP_HOST absent
