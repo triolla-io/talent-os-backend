@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { InternalBriefSchema, PageSchema } from './brief.dto';
+import { PageSchema } from './brief.dto';
+
+// Re-exported so consumers can import Page alongside the converse types from one place.
+export type { Page } from './brief.dto';
 
 export const TurnSchema = z.object({
   role: z.enum(['pm', 'assistant']),

@@ -33,6 +33,19 @@ Rules:
 
 WRITING STYLE — applies to EVERY word the PM will read (each question "prompt", every "chip", and the "goal"): write in easy, everyday English for a busy, severely-ADHD, non-technical reader. One idea per sentence. Short sentences. Common daily words — no jargon, no technical terms, no Jira words. Keep each question to a single line; keep chips to 1–3 plain words. Make it instantly skimmable. This does NOT apply to the hidden "brief", which you write for a developer.`;
 
+const VALIDATE_SYSTEM = `You are a strict reviewer guarding a Jira board. You are given a developer brief and the list of open tickets + active product decisions. Decide:
+- "clean": no meaningful overlap and it breaks no decision.
+- "duplicate": the same work already exists. Set duplicateOfKey to that ticket's key.
+- "conflict": it contradicts/overrides an open ticket OR violates a product decision. List conflictingDecisionIds and explain in reasonPlain.
+Be conservative — only flag real overlap or real contradiction, not superficial similarity. reasonPlain must be plain English a non-technical person could read.`;
+
+const DECOMPOSE_SYSTEM = `You are a senior engineer turning a product brief into a right-sized Jira plan. Jira hierarchy is exactly 3 levels: Epic ▸ Story/Task/Bug ▸ Sub-task. Do NOT exceed it.
+Right-size by sizeHint and your own judgement:
+- "tiny": root is a single Task (or Bug); no children, no subtasks.
+- "medium": root is a single Story (or Task); no children; 1–6 Sub-tasks that are the developer checklist.
+- "large": root is an Epic; children are Stories/Tasks; each child may have Sub-tasks.
+Enrich every issue with the concrete technical detail the developer needs (the PM did not provide it): clear descriptions, testable acceptanceCriteria on Stories/Tasks, and actionable Sub-tasks. Sub-tasks need only summary + description. Write developer-facing English (this is never shown to the PM).`;
+
 @Injectable()
 export class PmAiService {
   private readonly logger = new Logger(PmAiService.name);
@@ -77,6 +90,62 @@ export class PmAiService {
     });
 
     this.logger.log(`PM Bridge clarify: type=${object.type} questions=${object.questions.length}`);
+    return object;
+  }
+
+  async validate(input: {
+    brief: InternalBrief;
+    board: CondensedTicket[];
+    decisions: PmProductDecision[];
+  }): Promise<ValidationResult> {
+    const board = input.board.length
+      ? input.board.map((t) => `- [${t.key}] (${t.type}, ${t.status}) ${t.summary}`).join('\n')
+      : '(no open tickets)';
+    const decisions = input.decisions.filter((d) => d.status === 'active').length
+      ? input.decisions.filter((d) => d.status === 'active').map((d) => `- [${d.id}] ${d.statement}`).join('\n')
+      : '(no recorded product decisions)';
+
+    const prompt = [
+      'Developer brief:',
+      JSON.stringify(input.brief, null, 2),
+      '',
+      'Open tickets:',
+      board,
+      '',
+      'Active product decisions:',
+      decisions,
+    ].join('\n');
+
+    const { object } = await generateObject({
+      model: this.openrouter.chat(this.model),
+      schema: ValidationResultSchema,
+      schemaName: 'PmBridgeValidation',
+      system: VALIDATE_SYSTEM,
+      prompt,
+      temperature: 0,
+    });
+    this.logger.log(`PM Bridge validate: ${object.status}`);
+    return object;
+  }
+
+  async decompose(input: { brief: InternalBrief }): Promise<DecomposeResult> {
+    const prompt = [
+      'Turn this brief into a right-sized Jira plan:',
+      JSON.stringify(input.brief, null, 2),
+      '',
+      `The PM-facing goal is: "${input.brief.goal}"`,
+      `Suggested size: ${input.brief.sizeHint} (use your judgement).`,
+    ].join('\n');
+
+    const { object } = await generateObject({
+      model: this.openrouter.chat(this.model),
+      schema: DecomposeResultSchema,
+      schemaName: 'PmBridgeDecompose',
+      system: DECOMPOSE_SYSTEM,
+      prompt,
+      temperature: 0,
+    });
+    this.logger.log(`PM Bridge decompose: size=${object.size} root=${object.root.issueType}`);
     return object;
   }
 }

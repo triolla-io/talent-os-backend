@@ -51,3 +51,42 @@ describe('PmAiService.clarify', () => {
     expect(call.schemaName).toBe('PmBridgeClarify');
   });
 });
+
+const sampleBrief = {
+  goal: 'Make candidate search fast',
+  problem: 'Search takes several seconds on big lists',
+  desiredOutcomes: ['results under 1s'],
+  constraints: [],
+  affectedArea: { name: 'Talent Pool', route: '/talent-pool' },
+  sizeHint: 'medium' as const,
+  devNotes: ['add index on search column'],
+  rawText: 'search is too slow',
+  conversationDigest: 'pm wants faster candidate search',
+};
+
+describe('PmAiService.validate', () => {
+  it('returns a conflict verdict with a plain reason', async () => {
+    (generateObject as jest.Mock).mockResolvedValue({
+      object: { status: 'conflict', duplicateOfKey: null, reasonPlain: 'It undoes the read-only rule.', related: [], conflictingDecisionIds: ['d1'] },
+    });
+    const svc = makeService();
+    const r = await svc.validate({ brief: sampleBrief, board: [], decisions: [] });
+    expect(r.status).toBe('conflict');
+    expect(r.reasonPlain).toContain('read-only');
+  });
+});
+
+describe('PmAiService.decompose', () => {
+  it('returns a sized issue tree', async () => {
+    (generateObject as jest.Mock).mockResolvedValue({
+      object: { size: 'medium', root: { issueType: 'Story', summary: 'Fast search', description: 'd', acceptanceCriteria: ['<1s'], children: [], subtasks: [{ summary: 'add index', description: 'd' }] } },
+    });
+    const svc = makeService();
+    const r = await svc.decompose({ brief: sampleBrief });
+    expect(r.size).toBe('medium');
+    expect(r.root.subtasks).toHaveLength(1);
+    const call = (generateObject as jest.Mock).mock.calls[0][0];
+    expect(call.schemaName).toBe('PmBridgeDecompose');
+    expect(call.prompt).toContain('Make candidate search fast');
+  });
+});
