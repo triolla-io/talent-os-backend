@@ -37,6 +37,7 @@ model Organization {
 
   // Relations — pm-bridge
   pmProductDecisions PmProductDecision[]
+  pmHeldRequests     PmHeldRequest[]
 
   @@map("tenants")
 }
@@ -341,6 +342,29 @@ model PmProductDecision {
 
   @@index([tenantId, status], name: "idx_pm_decisions_tenant_status")
   @@map("pm_product_decisions")
+}
+
+// ─── pm_held_requests ─────────────────────────────────────────────────────────
+// Conflicting PM requests parked for Daniel to approve/reject. Nothing reaches Jira
+// until approved. status CHECK ('pending','approved','rejected') added via raw SQL.
+model PmHeldRequest {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  rawText      String    @map("raw_text") @db.Text
+  goal         String    @db.Text
+  conversation Json      @db.JsonB
+  brief        Json      @db.JsonB
+  verdict      Json      @db.JsonB
+  status       String    @default("pending") @db.Text
+  createdBy    String    @map("created_by") @db.Text
+  jiraKeys     Json?     @map("jira_keys") @db.JsonB
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status], name: "idx_pm_held_tenant_status")
+  @@map("pm_held_requests")
 }
 
 // ─── candidate_stage_summaries ────────────────────────────────────────────────
