@@ -34,6 +34,13 @@ export const envSchema = z.object({
   JIRA_SPRINT_ID: z.coerce.number().int().positive().optional(),
   PM_BRIDGE_ALLOWLIST: z.string().default(''),
   PM_BRIDGE_MODEL: z.string().default('anthropic/claude-sonnet-4.6'),
+  // PM Bridge smart-intake. Optional in the base schema (worker never uses them);
+  // the API re-requires the secret + assignee via apiEnvSchema.
+  JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID: z.string().min(1).optional(),
+  JIRA_DEFAULT_ASSIGNEE_EMAIL: z.string().min(1).optional(),
+  PM_HOLD_NOTIFY_EMAIL: z.string().min(1).default('daniel.s@triolla.io'),
+  PM_HOLD_TOKEN_SECRET: z.string().min(32, 'PM_HOLD_TOKEN_SECRET must be at least 32 characters').optional(),
+  API_PUBLIC_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -45,6 +52,8 @@ export const apiEnvSchema = envSchema.extend({
   JIRA_BASE_URL: z.url(),
   JIRA_EMAIL: z.string().min(1),
   JIRA_API_TOKEN: z.string().min(1),
+  JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID: z.string().min(1),
+  PM_HOLD_TOKEN_SECRET: z.string().min(32, 'PM_HOLD_TOKEN_SECRET must be at least 32 characters'),
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

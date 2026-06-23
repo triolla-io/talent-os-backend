@@ -68,4 +68,9 @@ JIRA_PROJECT_KEY              # default: TO
 JIRA_SPRINT_ID                # optional — new issues auto-added to this sprint
 PM_BRIDGE_ALLOWLIST           # comma-separated emails allowed to use PM Bridge (default: none)
 PM_BRIDGE_MODEL               # OpenRouter model for draft+validate (default: anthropic/claude-sonnet-4.6)
+JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID  # Jira accountId every issue is assigned to (Daniel)
+JIRA_DEFAULT_ASSIGNEE_EMAIL       # optional — fallback to look up the accountId at runtime
+PM_HOLD_NOTIFY_EMAIL              # who gets held-item emails (default daniel.s@triolla.io)
+PM_HOLD_TOKEN_SECRET             # ≥32 chars — signs approve/reject email links (NOT JWT_SECRET)
+API_PUBLIC_URL                   # optional — public base URL of the API for email links
 ```
