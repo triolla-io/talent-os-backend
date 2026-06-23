@@ -1146,3 +1146,32 @@ All endpoints operate within a tenant context:
 - Tenant ID is determined by the `x-tenant-id` header or environment config
 - All data is automatically filtered by tenant
 - No cross-tenant data leakage is possible
+
+## PM Bridge
+
+All routes are under `/api/pm-bridge`. `/converse`, `/commit`, and `/decisions` require a
+session cookie and PM-Bridge allowlist membership. `/holds/:id/{approve,reject}` are public,
+gated by a signed token from the notification email. The PM-facing payloads never contain
+Jira concepts (issue type, key, epic, acceptance criteria).
+
+### POST /pm-bridge/converse
+Request: `{ "messages": [{ "role": "pm"|"assistant", "content": string }], "page": { "name": string, "route": string } }`
+Response (one of):
+- `{ "type": "clarify", "questions": [{ "id": string, "prompt": string, "chips": string[], "allowFreeText": boolean }] }`
+- `{ "type": "ready", "goal": string, "brief": InternalBrief }`  ← echo `brief` back to /commit unchanged
+- `{ "type": "held" }`
+
+### POST /pm-bridge/commit
+Request: `{ "brief": InternalBrief, "page": { "name": string, "route": string } }`
+Response: `{ "type": "filed" | "merged" | "held" }`
+
+`InternalBrief = { goal, problem, desiredOutcomes: string[], constraints: string[],
+affectedArea: { name, route }, sizeHint: "tiny"|"medium"|"large", devNotes: string[],
+rawText, conversationDigest }` — opaque to the client; pass through verbatim.
+
+### GET|POST /pm-bridge/holds/:id/approve  · GET|POST /pm-bridge/holds/:id/reject
+Public. Query `?t=<signed token>`. GET returns an HTML confirm page; POST performs the action
+and returns an HTML result page.
+
+### GET/POST /pm-bridge/decisions · PATCH /pm-bridge/decisions/:id
+Unchanged from the existing decisions contract.
