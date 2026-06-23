@@ -1,124 +1,127 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { PmBridgeService } from './pm-bridge.service';
 
-const cleanVerdict = {
-  draft: { issueType: 'Story', summary: 'S', description: 'D', acceptanceCriteria: [] },
-  verdict: { status: 'clean', relatedTickets: [], conflictingDecisions: [], recommendedAction: 'create' },
+const brief = {
+  goal: 'Make search fast', problem: 'slow', desiredOutcomes: [], constraints: [],
+  affectedArea: { name: 'Talent Pool', route: '/talent-pool' }, sizeHint: 'medium' as const,
+  devNotes: [], rawText: 'search slow', conversationDigest: 'faster search',
 };
-const dirtyVerdict = { ...cleanVerdict, verdict: { ...cleanVerdict.verdict, status: 'duplicate' } };
+const page = brief.affectedArea;
 
-function makeService(verdictOverride = cleanVerdict) {
+function make(overrides: any = {}) {
   const prisma = {
-    pmProductDecision: {
-      findMany: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockImplementation((args: any) => Promise.resolve({ id: 'new-id', ...args.data })),
-      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      findUniqueOrThrow: jest.fn().mockImplementation((args: any) => Promise.resolve({ id: args.where.id })),
+    pmProductDecision: { findMany: jest.fn().mockResolvedValue([]) },
+    pmHeldRequest: {
+      create: jest.fn().mockResolvedValue({ id: 'hold-1' }),
+      findUnique: jest.fn(),
+      update: jest.fn().mockResolvedValue({}),
     },
   };
-  const jiraGateway = {
+  const jira = {
     readBoard: jest.fn().mockResolvedValue([]),
-    createIssue: jest.fn().mockResolvedValue({ key: 'TO-99', url: 'https://example.com/TO-99' }),
-    updateIssue: jest.fn().mockResolvedValue({ key: 'TO-5', url: 'https://example.com/TO-5' }),
+    createIssueTree: jest.fn().mockResolvedValue({ keys: ['TO-1', 'TO-2'] }),
+    addComment: jest.fn().mockResolvedValue(undefined),
   };
-  const pmAi = { draftAndValidate: jest.fn().mockResolvedValue(verdictOverride) };
-  return { service: new PmBridgeService(prisma as any, jiraGateway as any, pmAi as any), prisma, jiraGateway, pmAi };
+  const ai = {
+    clarify: jest.fn(),
+    validate: jest.fn(),
+    decompose: jest.fn().mockResolvedValue({ size: 'medium', root: { issueType: 'Story', summary: 'S', description: 'd', acceptanceCriteria: [], children: [], subtasks: [] } }),
+  };
+  const notify = { notifyHeld: jest.fn().mockResolvedValue(undefined) };
+  Object.assign(ai, overrides.ai);
+  return { svc: new PmBridgeService(prisma as any, jira as any, ai as any, notify as any), prisma, jira, ai, notify };
 }
 
-const baseIssue = { issueType: 'Story' as const, summary: 'S', description: 'D', acceptanceCriteria: [] };
-
-describe('PmBridgeService — commit gate', () => {
-  it('clean-create writes successfully', async () => {
-    const { service, jiraGateway } = makeService();
-    const result = await service.commit({ action: 'create', issue: baseIssue }, 'tenant-1', 'pm@x.com');
-    expect(jiraGateway.createIssue).toHaveBeenCalled();
-    expect(result.key).toBe('TO-99');
+describe('PmBridgeService.converse', () => {
+  it('passes through a clarify result', async () => {
+    const { svc, ai } = make();
+    ai.clarify.mockResolvedValue({ type: 'clarify', questions: [{ id: 'q1', prompt: 'slow or wrong?', chips: [], allowFreeText: true }], goal: '', brief: null });
+    const r = await svc.converse({ messages: [{ role: 'pm', content: 'bad search' }], page }, 'tenant-1', 'pm@x.com');
+    expect(r).toEqual({ type: 'clarify', questions: [{ id: 'q1', prompt: 'slow or wrong?', chips: [], allowFreeText: true }] });
   });
 
-  it('non-clean + overrideReason writes successfully', async () => {
-    const { service, jiraGateway } = makeService(dirtyVerdict as any);
-    await service.commit({ action: 'create', issue: baseIssue, overrideReason: 'intentional' }, 'tenant-1', 'pm@x.com');
-    expect(jiraGateway.createIssue).toHaveBeenCalled();
+  it('returns ready + brief when the AI is satisfied', async () => {
+    const { svc, ai } = make();
+    ai.clarify.mockResolvedValue({ type: 'ready', questions: [], goal: 'Make search fast', brief });
+    const r = await svc.converse({ messages: [{ role: 'pm', content: 'x' }], page }, 'tenant-1', 'pm@x.com');
+    expect(r).toEqual({ type: 'ready', goal: 'Make search fast', brief });
   });
 
-  it('non-clean + no overrideReason throws 409 with verdict', async () => {
-    const { service } = makeService(dirtyVerdict as any);
-    await expect(
-      service.commit({ action: 'create', issue: baseIssue }, 'tenant-1', 'pm@x.com'),
-    ).rejects.toThrow(ConflictException);
-  });
-
-  it('update requires targetKey — throws 400 without it', async () => {
-    const { service } = makeService();
-    await expect(
-      service.commit({ action: 'update', issue: baseIssue }, 'tenant-1', 'pm@x.com'),
-    ).rejects.toThrow(BadRequestException);
-  });
-
-  it('update with targetKey writes successfully', async () => {
-    const { service, jiraGateway } = makeService();
-    await service.commit({ action: 'update', issue: baseIssue, targetKey: 'TO-5' }, 'tenant-1', 'pm@x.com');
-    expect(jiraGateway.updateIssue).toHaveBeenCalledWith('TO-5', baseIssue);
-  });
-
-  it('update skips AI validation and board read (no wasted work)', async () => {
-    const { service, jiraGateway, pmAi } = makeService();
-    await service.commit({ action: 'update', issue: baseIssue, targetKey: 'TO-5' }, 'tenant-1', 'pm@x.com');
-    expect(pmAi.draftAndValidate).not.toHaveBeenCalled();
-    expect(jiraGateway.readBoard).not.toHaveBeenCalled();
-    expect(jiraGateway.updateIssue).toHaveBeenCalledWith('TO-5', baseIssue);
-  });
-
-  it('create validates the full submitted issue, not just the summary', async () => {
-    const { service, pmAi } = makeService();
-    const issue = {
-      issueType: 'Story' as const,
-      summary: 'Add login',
-      description: 'Users sign in',
-      acceptanceCriteria: ['Shows email field'],
-    };
-    await service.commit({ action: 'create', issue }, 'tenant-1', 'pm@x.com');
-    const text = pmAi.draftAndValidate.mock.calls[0][0].text as string;
-    expect(text).toContain('Add login');
-    expect(text).toContain('Users sign in');
-    expect(text).toContain('Shows email field');
-  });
-
-  it('supersedesDecisionId marks decision superseded after successful write', async () => {
-    const { service, prisma } = makeService();
-    await service.commit(
-      { action: 'create', issue: baseIssue, supersedesDecisionId: 'dec-uuid' },
-      'tenant-1',
-      'pm@x.com',
-    );
-    expect(prisma.pmProductDecision.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ id: 'dec-uuid' }) }),
-    );
+  it('holds for Daniel when still unclear after the max rounds', async () => {
+    const { svc, ai, prisma, notify } = make();
+    ai.clarify.mockResolvedValue({ type: 'clarify', questions: [{ id: 'q', prompt: '?', chips: [], allowFreeText: true }], goal: '', brief: null });
+    // 3 assistant turns already used → cap reached
+    const messages = [
+      { role: 'pm', content: 'a' }, { role: 'assistant', content: 'q1' },
+      { role: 'pm', content: 'b' }, { role: 'assistant', content: 'q2' },
+      { role: 'pm', content: 'c' }, { role: 'assistant', content: 'q3' },
+      { role: 'pm', content: 'd' },
+    ];
+    const r = await svc.converse({ messages, page } as any, 'tenant-1', 'pm@x.com');
+    expect(r).toEqual({ type: 'held' });
+    expect(prisma.pmHeldRequest.create).toHaveBeenCalled();
+    expect(notify.notifyHeld).toHaveBeenCalled();
   });
 });
 
-describe('PmBridgeService — decisions CRUD', () => {
-  it('listDecisions is tenant-scoped', async () => {
-    const { service, prisma } = makeService();
-    await service.listDecisions('tenant-abc');
-    expect(prisma.pmProductDecision.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-abc' }) }),
-    );
+describe('PmBridgeService.commit', () => {
+  it('clean → builds the tree and files', async () => {
+    const { svc, ai, jira } = make();
+    ai.validate.mockResolvedValue({ status: 'clean', duplicateOfKey: null, reasonPlain: '', related: [], conflictingDecisionIds: [] });
+    const r = await svc.commit({ brief, page }, 'tenant-1', 'pm@x.com');
+    expect(jira.createIssueTree).toHaveBeenCalled();
+    expect(r).toEqual({ type: 'filed' });
   });
 
-  it('createDecision is tenant-scoped', async () => {
-    const { service, prisma } = makeService();
-    await service.createDecision({ statement: 'No dark mode' }, 'tenant-abc', 'pm@x.com');
-    expect(prisma.pmProductDecision.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ tenantId: 'tenant-abc' }) }),
-    );
+  it('duplicate → folds a comment, files nothing', async () => {
+    const { svc, ai, jira } = make();
+    ai.validate.mockResolvedValue({ status: 'duplicate', duplicateOfKey: 'TO-9', reasonPlain: 'same', related: [], conflictingDecisionIds: [] });
+    const r = await svc.commit({ brief, page }, 'tenant-1', 'pm@x.com');
+    expect(jira.addComment).toHaveBeenCalledWith('TO-9', expect.stringContaining('Make search fast'));
+    expect(jira.createIssueTree).not.toHaveBeenCalled();
+    expect(r).toEqual({ type: 'merged' });
   });
 
-  it('updateDecision throws 404 when decision not found for tenant', async () => {
-    const { service, prisma } = makeService();
-    prisma.pmProductDecision.updateMany.mockResolvedValue({ count: 0 });
-    await expect(service.updateDecision('missing-id', { status: 'superseded' }, 'tenant-abc')).rejects.toThrow(
-      NotFoundException,
-    );
+  it('conflict → holds + notifies, files nothing', async () => {
+    const { svc, ai, jira, prisma, notify } = make();
+    ai.validate.mockResolvedValue({ status: 'conflict', duplicateOfKey: null, reasonPlain: 'breaks rule', related: [], conflictingDecisionIds: ['d1'] });
+    const r = await svc.commit({ brief, page }, 'tenant-1', 'pm@x.com');
+    expect(prisma.pmHeldRequest.create).toHaveBeenCalled();
+    expect(notify.notifyHeld).toHaveBeenCalledWith(expect.objectContaining({ holdId: 'hold-1', reasonPlain: 'breaks rule' }));
+    expect(jira.createIssueTree).not.toHaveBeenCalled();
+    expect(r).toEqual({ type: 'held' });
+  });
+});
+
+describe('PmBridgeService.approveHold / rejectHold', () => {
+  it('approve builds the stored brief and marks approved', async () => {
+    const { svc, prisma, jira } = make();
+    prisma.pmHeldRequest.findUnique.mockResolvedValue({ id: 'hold-1', status: 'pending', brief });
+    const r = await svc.approveHold('hold-1');
+    expect(jira.createIssueTree).toHaveBeenCalled();
+    expect(prisma.pmHeldRequest.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'approved' }) }));
+    expect(r.status).toBe('approved');
+  });
+
+  it('approve on an already-resolved hold is a no-op', async () => {
+    const { svc, prisma, jira } = make();
+    prisma.pmHeldRequest.findUnique.mockResolvedValue({ id: 'hold-1', status: 'approved', brief });
+    const r = await svc.approveHold('hold-1');
+    expect(r.status).toBe('already_resolved');
+    expect(jira.createIssueTree).not.toHaveBeenCalled();
+  });
+
+  it('approve on a missing hold throws 404', async () => {
+    const { svc, prisma } = make();
+    prisma.pmHeldRequest.findUnique.mockResolvedValue(null);
+    await expect(svc.approveHold('nope')).rejects.toThrow(NotFoundException);
+  });
+
+  it('reject marks rejected without touching Jira', async () => {
+    const { svc, prisma, jira } = make();
+    prisma.pmHeldRequest.findUnique.mockResolvedValue({ id: 'hold-1', status: 'pending', brief });
+    const r = await svc.rejectHold('hold-1');
+    expect(r.status).toBe('rejected');
+    expect(jira.createIssueTree).not.toHaveBeenCalled();
   });
 });
