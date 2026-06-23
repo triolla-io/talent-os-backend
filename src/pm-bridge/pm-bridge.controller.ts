@@ -14,7 +14,7 @@ import { ZodError } from 'zod';
 import { SessionGuard } from '../auth/session.guard';
 import { PmBridgeGuard } from './pm-bridge.guard';
 import { PmBridgeService } from './pm-bridge.service';
-import { DraftRequestSchema } from './dto/draft.dto';
+import { ConverseRequestSchema } from './dto/converse.dto';
 import { CommitRequestSchema } from './dto/commit.dto';
 import { CreateDecisionSchema, UpdateDecisionSchema } from './dto/decision.dto';
 
@@ -23,15 +23,15 @@ import { CreateDecisionSchema, UpdateDecisionSchema } from './dto/decision.dto';
 export class PmBridgeController {
   constructor(private readonly service: PmBridgeService) {}
 
-  @Post('draft')
-  async draft(@Body() body: unknown, @Req() req: Request) {
-    const result = DraftRequestSchema.safeParse(body);
+  @Post('converse')
+  async converse(@Body() body: unknown, @Req() req: Request) {
+    const result = ConverseRequestSchema.safeParse(body);
     if (!result.success) {
       throw new BadRequestException({
         error: { code: 'VALIDATION_ERROR', message: 'Validation failed', details: this.formatZodErrors(result.error) },
       });
     }
-    return this.service.draft(result.data, req.session!.org);
+    return this.service.converse(result.data, req.session!.org, req.pmBridgeEmail!);
   }
 
   @Post('commit')
