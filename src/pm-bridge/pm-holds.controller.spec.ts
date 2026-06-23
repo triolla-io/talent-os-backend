@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PmHoldsController } from './pm-holds.controller';
 import { PmBridgeService } from './pm-bridge.service';
@@ -48,5 +49,10 @@ describe('PmHoldsController', () => {
     const html = await c.approve('hold-1', 'tok');
     expect(service.approveHold).not.toHaveBeenCalled();
     expect(html).toContain('not valid');
+  });
+
+  it('GET approve rejects a malformed (non-UUID-shaped) hold id — no XSS reflection', async () => {
+    const c = await build();
+    expect(() => c.approvePage('<script>alert(1)</script>', 'tok')).toThrow(BadRequestException);
   });
 });

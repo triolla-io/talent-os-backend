@@ -1,7 +1,21 @@
-import { Controller, Get, Header, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Header, Param, Post, Query } from '@nestjs/common';
 import { Public } from '../common/decorators/public.decorator';
 import { PmBridgeService } from './pm-bridge.service';
 import { PmHoldTokenService } from './pm-hold-token.service';
+
+// Hold ids are UUIDs; reject anything outside that shape before it can reach the HTML.
+const HOLD_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+// Escape every dynamic value interpolated into the HTML responses below. These pages are
+// public (no session) and reflect the path `id`, so an unescaped value would be reflected XSS.
+function esc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // Hit from Daniel's email client — no session cookie. Guarded by the signed token only.
 // GET renders a confirm page (so email link-prefetchers can't trigger the action);
@@ -48,16 +62,17 @@ export class PmHoldsController {
   }
 
   private confirmPage(id: string, t: string, action: 'approve' | 'reject', prompt: string): string {
+    if (!HOLD_ID_RE.test(id)) throw new BadRequestException('Invalid hold id');
     const safeT = encodeURIComponent(t ?? '');
     return `<!doctype html><html><body style="font-family:system-ui;max-width:32rem;margin:4rem auto;text-align:center">
-<h2>PM Bridge</h2><p>${prompt}</p>
-<form method="post" action="/api/pm-bridge/holds/${id}/${action}?t=${safeT}">
+<h2>PM Bridge</h2><p>${esc(prompt)}</p>
+<form method="post" action="/api/pm-bridge/holds/${esc(id)}/${esc(action)}?t=${safeT}">
 <button type="submit" style="padding:.6rem 1.4rem;font-size:1rem">${action === 'approve' ? 'Approve' : 'Reject'}</button>
 </form></body></html>`;
   }
 
   private resultPage(message: string): string {
     return `<!doctype html><html><body style="font-family:system-ui;max-width:32rem;margin:4rem auto;text-align:center">
-<h2>PM Bridge</h2><p>${message}</p></body></html>`;
+<h2>PM Bridge</h2><p>${esc(message)}</p></body></html>`;
   }
 }
