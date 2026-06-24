@@ -132,7 +132,7 @@ export class JiraGatewayService {
     if (input.parentKey) fields.parent = { key: input.parentKey };
     if (assignee) fields.assignee = assignee;
     // Sub-tasks inherit the parent's sprint; only set sprint on standalone/standard issues.
-    if (this.sprintId && input.issueType !== 'Sub-task') fields.customfield_10020 = this.sprintId;
+    if (this.sprintId && input.issueType !== 'Subtask') fields.customfield_10020 = this.sprintId;
 
     const res = await fetch(`${this.baseUrl}/rest/api/3/issue`, {
       method: 'POST',
@@ -170,7 +170,7 @@ export class JiraGatewayService {
         keys.push(childRes.key);
         for (const st of child.subtasks) {
           const stRes = await this.createOne({
-            issueType: 'Sub-task',
+            issueType: 'Subtask',
             summary: st.summary,
             description: st.description,
             acceptanceCriteria: [],
@@ -182,7 +182,7 @@ export class JiraGatewayService {
     } else {
       for (const st of root.subtasks) {
         const stRes = await this.createOne({
-          issueType: 'Sub-task',
+          issueType: 'Subtask',
           summary: st.summary,
           description: st.description,
           acceptanceCriteria: [],

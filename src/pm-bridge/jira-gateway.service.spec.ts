@@ -86,7 +86,7 @@ describe('JiraGatewayService.createIssueTree', () => {
     // child parented to epic, subtask parented to child
     expect(bodies[1].fields.parent).toEqual({ key: 'TO-10' });
     expect(bodies[2].fields.parent).toEqual({ key: 'TO-11' });
-    expect(bodies[2].fields.issuetype).toEqual({ name: 'Sub-task' });
+    expect(bodies[2].fields.issuetype).toEqual({ name: 'Subtask' });
   });
 });
 
