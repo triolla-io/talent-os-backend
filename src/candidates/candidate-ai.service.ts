@@ -11,6 +11,28 @@ export interface CandidateSummaryParams {
   jobTitle?: string | null;
 }
 
+// Strips ONE leading bullet marker the model may emit: a glyph (•, -, –, *) or
+// numbering (`N.` / `N)`), with any trailing space. The frontend's renderer only
+// strips glyphs, not numbering — so we MUST strip numbering here to keep stored
+// content clean.
+const LEADING_MARKER = /^\s*(?:[•\-–*]|\d+[.)])\s*/;
+
+/**
+ * Normalizes raw LLM output into newline-separated bullet lines:
+ * split on newlines, trim each line, strip a stray leading glyph/number,
+ * drop blank lines, cap at 5 lines, re-join with `\n`.
+ * Returns '' for empty / whitespace-only input.
+ */
+export function formatSummaryBullets(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .split('\n')
+    .map((line) => line.trim().replace(LEADING_MARKER, '').trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 5)
+    .join('\n');
+}
+
 @Injectable()
 export class CandidateAiService {
   private readonly logger = new Logger(CandidateAiService.name);
