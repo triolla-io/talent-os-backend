@@ -185,6 +185,7 @@ Create a new candidate profile, optionally with a CV file upload.
 
 - `full_name` and `source` are required
 - `email`, `phone`, `current_role`, `location`, `years_experience`, `ai_summary`, `source_agency` are nullable
+- `ai_summary` is newline-separated bullet lines — one short fact per line, no leading bullet glyph. May be empty/null when no summary exists. Legacy candidates may still hold a single paragraph; clients must render both forms (no migration).
 - `job_id` is required — links the candidate to a specific job opening
 - `source` must be one of: `linkedin`, `website`, `agency`, `referral`, `direct`, `manual`
 - `source_agency` is only relevant when `source = agency`
