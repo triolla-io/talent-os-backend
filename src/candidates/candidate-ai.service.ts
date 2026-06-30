@@ -40,8 +40,9 @@ export class CandidateAiService {
   constructor(private readonly config: ConfigService) {}
 
   /**
-   * Generates a 2-sentence summary of the candidate using OpenRouter (gpt-4o-mini).
-   * Falls back gracefully and returns `null` if the API call fails or encounters an error.
+   * Generates 3–5 concise bullet lines summarizing the candidate using
+   * OpenRouter (gpt-4o-mini), normalized to newline-separated lines with no
+   * leading glyph. Returns `null` if the API call fails or output is empty.
    */
   async generateSummary(params: CandidateSummaryParams): Promise<string | null> {
     try {
@@ -53,11 +54,13 @@ export class CandidateAiService {
 
       const client = new OpenRouter({ apiKey });
 
-      const instructions = `You are an HR assistant. Write exactly 2 sentences summarizing the candidate.
-Sentence 1 must detail their current role, experience level, and years of experience.
-Sentence 2 must highlight their top skills or a notable achievement.
+      const instructions = `You are an HR assistant. Summarize the candidate as 3 to 5 concise bullet points.
+Rules:
+- One short fact per line, separated by newlines. Each line at most ~12 words.
+- Do NOT add bullet characters, dashes, or numbering — output the plain fact text only.
+- Prioritize, in order: current role + seniority/years; standout skills; a notable achievement or domain.
 
-Return ONLY the raw string summary (no quotes, no JSON, no markdown).`;
+Return ONLY the raw lines (no quotes, no JSON, no markdown).`;
 
       // Build context payload
       const contextLines = [
@@ -84,10 +87,15 @@ Return ONLY the raw string summary (no quotes, no JSON, no markdown).`;
       });
 
       const raw = await result.getText();
-      const cleanSummary = raw.trim().replace(/^"|"$/g, '');
-      
+      const summary = formatSummaryBullets(raw);
+
+      if (!summary) {
+        this.logger.warn(`AI summary for candidate ${params.fullName} was empty after formatting`);
+        return null;
+      }
+
       this.logger.log(`Successfully generated AI summary for candidate ${params.fullName}`);
-      return cleanSummary;
+      return summary;
 
     } catch (err) {
       // Graceful degradation: log and return null
