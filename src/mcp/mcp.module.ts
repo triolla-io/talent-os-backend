@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { mcpEnvSchema } from '../config/env';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -25,6 +26,7 @@ import { McpOAuthController } from './mcp-oauth.controller';
         redact: ['req.headers.authorization', 'req.headers.cookie'],
       },
     }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     PrismaModule,
     AuthModule,
     CandidatesModule,

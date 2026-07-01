@@ -1,4 +1,5 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 import { McpOAuthProvider } from './mcp-oauth.provider';
 
@@ -6,6 +7,7 @@ import { McpOAuthProvider } from './mcp-oauth.provider';
 // AuthModule (for AuthService), so this route sits behind SessionGuard unless marked
 // @Public(). No cookie/session is involved in the MCP federated-login flow.
 @Public()
+@UseGuards(ThrottlerGuard)
 @Controller('mcp-oauth')
 export class McpOAuthController {
   constructor(private readonly provider: McpOAuthProvider) {}

@@ -46,6 +46,9 @@ export const envSchema = z.object({
   API_PUBLIC_URL: z.url().optional(),
   MCP_PUBLIC_URL: z.url().optional(),
   MCP_JWT_SECRET: z.string().min(32, 'MCP_JWT_SECRET must be at least 32 characters').optional(),
+  // Optional extra Host header values allowed at /mcp (DNS-rebinding allowlist) when a reverse
+  // proxy forwards a Host that differs from MCP_PUBLIC_URL's host. Comma-separated.
+  MCP_ALLOWED_HOSTS: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

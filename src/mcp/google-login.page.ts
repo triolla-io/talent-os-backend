@@ -28,6 +28,9 @@ document.getElementById('signin').addEventListener('click', () => {
     const client = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: 'openid email profile',
+      // Force Google's account chooser + consent every time so a lingering Google session
+      // cookie can't silently authorize a (possibly attacker-registered) MCP client.
+      prompt: 'consent select_account',
       callback: async (resp) => {
         if (!resp || !resp.access_token) return fail('No access token from Google');
         try {

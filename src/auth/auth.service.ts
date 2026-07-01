@@ -45,6 +45,23 @@ export class AuthService {
 
     // If GOOGLE_CLIENT_ID is configured, use real Google UserInfo API regardless of environment
     if (clientId) {
+      // SECURITY (audience validation): a Google access token is an opaque bearer
+      // credential. Calling userinfo alone does NOT prove the token was issued to *our*
+      // OAuth client — Google's userinfo happily accepts any valid token with the email
+      // scope. Without this check an attacker could mint a token via their own Google
+      // OAuth app (phishing a victim through the standard consent screen) and replay it
+      // here to sign in as that victim (account takeover). So first verify the token's
+      // audience matches GOOGLE_CLIENT_ID via Google's tokeninfo endpoint.
+      const infoRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+      );
+      if (!infoRes.ok) throw new UnauthorizedException('Google token verification failed');
+      const info = (await infoRes.json()) as { aud?: string; azp?: string };
+      if (info.aud !== clientId) {
+        throw new UnauthorizedException('Google token was not issued for this application');
+      }
+
+      // Audience verified — safe to fetch the profile (name/picture) from userinfo.
       const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });

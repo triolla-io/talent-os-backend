@@ -1319,3 +1319,18 @@ Write and AI tools return a tool error for `viewer` callers.
 Write tools carry MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`) so MCP
 clients can prompt for per-call approval. Tool failures are returned as structured MCP tool
 errors (`isError: true`), not thrown transport errors.
+
+### Security hardening
+
+- **Google token audience check**: the federated login verifies the Google token's `aud`
+  matches `GOOGLE_CLIENT_ID` (via `tokeninfo`) before trusting the identity — a token minted
+  for another OAuth app cannot be replayed to sign in.
+- **Forced consent**: the Google login always prompts (`consent select_account`), so a lingering
+  Google session can't silently authorize a newly registered MCP client.
+- **Rate limits** (also enforce a Cloudflare WAF rate rule at the edge): `/register`, `/token`,
+  `/authorize` → 60 / 15 min per IP; `/mcp-oauth/complete` → 20 / min; `/mcp` → 120 / min.
+  Over-limit requests receive `429`.
+- **DNS-rebinding protection**: `/mcp` validates the `Host` header against the `MCP_PUBLIC_URL`
+  host (extendable via `MCP_ALLOWED_HOSTS`); mismatches receive `403`.
+- **Transport hardening**: `helmet` security headers, `x-powered-by` disabled, JSON body capped
+  at 1 MB.

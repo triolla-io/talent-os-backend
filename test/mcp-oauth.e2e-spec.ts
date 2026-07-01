@@ -70,6 +70,9 @@ describe('MCP OAuth + tools (e2e)', () => {
     const list = await request(baseUrl)
       .post('/mcp')
       .set('Authorization', `Bearer ${bearer}`)
+      // Host must match the DNS-rebinding allowlist (MCP_PUBLIC_URL host); supertest dials
+      // 127.0.0.1:<random-port>, so we send the canonical Host header explicitly.
+      .set('Host', 'localhost:3100')
       .set('Accept', 'application/json, text/event-stream')
       .send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
     expect(list.status).toBe(200);
@@ -79,6 +82,7 @@ describe('MCP OAuth + tools (e2e)', () => {
     const call = await request(baseUrl)
       .post('/mcp')
       .set('Authorization', `Bearer ${bearer}`)
+      .set('Host', 'localhost:3100')
       .set('Accept', 'application/json, text/event-stream')
       .send({
         jsonrpc: '2.0',
@@ -96,6 +100,7 @@ describe('MCP OAuth + tools (e2e)', () => {
     const call = await request(baseUrl)
       .post('/mcp')
       .set('Authorization', `Bearer ${bearer}`)
+      .set('Host', 'localhost:3100')
       .set('Accept', 'application/json, text/event-stream')
       .send({
         jsonrpc: '2.0',

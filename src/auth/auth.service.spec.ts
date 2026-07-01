@@ -224,4 +224,49 @@ describe('AuthService', () => {
     const invalidToken = 'not-json-at-all!!!';
     await expect(service.googleVerify(invalidToken)).rejects.toThrow(UnauthorizedException);
   });
+
+  // ─── Google access-token audience validation (account-takeover guard) ────────
+  describe('googleVerify audience validation (GOOGLE_CLIENT_ID set)', () => {
+    const realFetch = global.fetch;
+    beforeEach(() => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'GOOGLE_CLIENT_ID') return 'our-client-id.apps.googleusercontent.com';
+        if (key === 'NODE_ENV') return 'production';
+        return undefined;
+      });
+    });
+    afterEach(() => {
+      global.fetch = realFetch;
+    });
+
+    it('rejects a Google token whose audience is a different OAuth client', async () => {
+      // tokeninfo returns a token minted for someone else's app → must be rejected before userinfo.
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ aud: 'attacker-client-id.apps.googleusercontent.com' }),
+      }) as unknown as typeof fetch;
+
+      await expect(service.googleVerify('victim-access-token')).rejects.toThrow(UnauthorizedException);
+      expect(global.fetch).toHaveBeenCalledTimes(1); // never reached userinfo
+      expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain('tokeninfo');
+    });
+
+    it('accepts a token whose audience matches GOOGLE_CLIENT_ID', async () => {
+      (mockPrisma.user.findFirst as jest.Mock).mockResolvedValue(mockUser);
+      (mockPrisma.user.update as jest.Mock).mockResolvedValue(mockUser);
+      (mockPrisma.organization.findUniqueOrThrow as jest.Mock).mockResolvedValue(mockOrg);
+
+      global.fetch = jest
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ aud: 'our-client-id.apps.googleusercontent.com' }) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ email: 'test@example.com', name: 'Test User', sub: 'g-1', email_verified: true }),
+        }) as unknown as typeof fetch;
+
+      const result = await service.googleVerify('valid-access-token');
+      expect(result.meResponse.email).toBe('test@example.com');
+      expect(global.fetch).toHaveBeenCalledTimes(2); // tokeninfo + userinfo
+    });
+  });
 });
