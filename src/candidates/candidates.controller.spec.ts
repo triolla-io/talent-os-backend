@@ -180,6 +180,14 @@ describe('CandidatesController (Integration Tests)', () => {
           error: { code: 'VALIDATION_ERROR' },
         });
       });
+
+      it('rejects out-of-range ai_score with 400', async () => {
+        await request(app.getHttpServer()).patch(patchUrl).send({ ai_score: 150 }).expect(400);
+      });
+
+      it('rejects non-integer ai_score with 400', async () => {
+        await request(app.getHttpServer()).patch(patchUrl).send({ ai_score: 42.5 }).expect(400);
+      });
     });
 
     describe('Error Cases', () => {

@@ -291,6 +291,10 @@ export class CandidatesService {
     if (dto.current_role !== undefined) updateData.currentRole = dto.current_role;
     if (dto.location !== undefined) updateData.location = dto.location;
     if (dto.years_experience !== undefined) updateData.yearsExperience = dto.years_experience;
+    if (dto.ai_score !== undefined) {
+      updateData.aiScore = dto.ai_score;
+      updateData.isScoreOverridden = true;
+    }
 
     // Handle atomic job assignment flow
     if (dto.job_id) {

@@ -145,6 +145,26 @@ describe('CandidatesService', () => {
     });
   });
 
+  describe('manual ai_score override', () => {
+    it('sets aiScore and isScoreOverridden when ai_score is provided', async () => {
+      const update = jest.fn().mockResolvedValue({});
+      prismaMock.candidate.findFirst = jest.fn().mockResolvedValue(mockCandidate({ jobId: 'job-1' }));
+      prismaMock.candidate.update = update;
+      prismaMock.candidate.findMany = jest
+        .fn()
+        .mockResolvedValue([mockCandidate({ aiScore: 42, isScoreOverridden: true })]);
+
+      await service.updateCandidate('cand-1', { ai_score: 42 } as never, TENANT_ID);
+
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'cand-1' },
+          data: expect.objectContaining({ aiScore: 42, isScoreOverridden: true }),
+        }),
+      );
+    });
+  });
+
   // Test 1: no params → returns all candidates with ai_score from denormalized field
   it('returns all candidates scoped to tenantId with ai_score computed', async () => {
     prismaMock.candidate.findMany.mockResolvedValue([

@@ -11,6 +11,7 @@ export const UpdateCandidateSchema = z.object({
   current_role: z.string().optional(),
   location: z.string().optional(),
   years_experience: z.coerce.number().int().min(0).max(50).optional(),
+  ai_score: z.coerce.number().int().min(0).max(100).optional(),
 });
 
 export type UpdateCandidateDto = z.infer<typeof UpdateCandidateSchema>;
