@@ -165,6 +165,44 @@ describe('CandidatesService', () => {
     });
   });
 
+  describe('revertScore', () => {
+    it('clears the flag and nulls aiScore when there is no assigned job', async () => {
+      const update = jest.fn().mockResolvedValue({});
+      prismaMock.candidate.findFirst = jest
+        .fn()
+        .mockResolvedValue(mockCandidate({ jobId: null, cvText: 'cv', isScoreOverridden: true }));
+      prismaMock.candidate.update = update;
+      prismaMock.candidate.findMany = jest.fn().mockResolvedValue([mockCandidate({ aiScore: null })]);
+
+      await service.revertScore('cand-1', TENANT_ID);
+
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ isScoreOverridden: false, aiScore: null }) }),
+      );
+    });
+
+    it('clears the flag and re-scores when a job and CV text exist', async () => {
+      prismaMock.candidate.findFirst = jest
+        .fn()
+        .mockResolvedValue(mockCandidate({ jobId: 'job-1', cvText: 'real cv', isScoreOverridden: true }));
+      prismaMock.candidate.update = jest.fn().mockResolvedValue({});
+      prismaMock.job = {
+        findFirst: jest.fn().mockResolvedValue({ id: 'job-1', title: 'Dev', description: 'd', mustHaveSkills: [] }),
+      };
+      prismaMock.application = { findFirst: jest.fn().mockResolvedValue({ id: 'app-1' }) };
+      prismaMock.candidateJobScore = { upsert: jest.fn().mockResolvedValue({}) };
+      prismaMock.candidate.findMany = jest.fn().mockResolvedValue([mockCandidate({ aiScore: 75 })]);
+
+      await service.revertScore('cand-1', TENANT_ID);
+
+      // scoringAgent.score() mock returns { score: 75, ... } from module setup
+      expect(prismaMock.candidateJobScore.upsert).toHaveBeenCalled();
+      expect(prismaMock.candidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ aiScore: 75 }) }),
+      );
+    });
+  });
+
   // Test 1: no params → returns all candidates with ai_score from denormalized field
   it('returns all candidates scoped to tenantId with ai_score computed', async () => {
     prismaMock.candidate.findMany.mockResolvedValue([

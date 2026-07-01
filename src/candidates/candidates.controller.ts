@@ -177,6 +177,18 @@ export class CandidatesController {
   }
 
   /**
+   * TO-58: clear a manual match-score override and return to an AI score.
+   * Re-scores the assigned job immediately; nulls the score when no job/CV text.
+   * @returns Updated CandidateResponse
+   */
+  @Post(':id/score/revert')
+  @HttpCode(200)
+  async revertScore(@Param('id') id: string, @Req() req: Request): Promise<CandidateResponse> {
+    const tenantId = req.session!.org;
+    return this.candidatesService.revertScore(id, tenantId);
+  }
+
+  /**
    * Save or update a free-text summary for a specific hiring stage the candidate has gone through.
    * Upserts the CandidateStageSummary record for the (candidateId, stageId) pair.
    * The stage must belong to the candidate's currently assigned job.

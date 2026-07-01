@@ -487,6 +487,116 @@ export class CandidatesService {
     return this.findOne(candidateId, tenantId);
   }
 
+  /**
+   * Re-scores a candidate against its assigned job and writes the denormalized
+   * aiScore. Callers MUST ensure the candidate has a jobId and non-blank cvText.
+   * Reuses the reassignment scoring shape (ScoringAgentService + CandidateJobScore).
+   */
+  private async rescoreAssignedJob(
+    candidate: {
+      id: string;
+      jobId: string;
+      cvText: string | null;
+      currentRole: string | null;
+      yearsExperience: number | null;
+      skills: string[];
+    },
+    tenantId: string,
+  ): Promise<void> {
+    const job = await this.prisma.job.findFirst({
+      where: { id: candidate.jobId, tenantId },
+      select: { id: true, title: true, description: true, mustHaveSkills: true },
+    });
+    if (!job) {
+      await this.prisma.candidate.update({ where: { id: candidate.id }, data: { aiScore: null } });
+      return;
+    }
+
+    const scoreResult = await this.scoringAgent.score({
+      cvText: candidate.cvText || '',
+      candidateFields: {
+        currentRole: candidate.currentRole,
+        yearsExperience: candidate.yearsExperience,
+        skills: candidate.skills,
+      },
+      job: {
+        title: job.title,
+        description: job.description || '',
+        requirements: job.mustHaveSkills || [],
+      },
+    });
+
+    const application = await this.prisma.application.findFirst({
+      where: { candidateId: candidate.id, jobId: candidate.jobId, tenantId },
+      select: { id: true },
+    });
+
+    if (application) {
+      await this.prisma.candidateJobScore.upsert({
+        where: { idx_scores_unique_per_app: { tenantId, applicationId: application.id } },
+        create: {
+          tenantId,
+          applicationId: application.id,
+          score: scoreResult.score,
+          reasoning: scoreResult.reasoning,
+          strengths: scoreResult.strengths,
+          gaps: scoreResult.gaps,
+          modelUsed: scoreResult.modelUsed,
+        },
+        update: {
+          score: scoreResult.score,
+          reasoning: scoreResult.reasoning,
+          strengths: scoreResult.strengths,
+          gaps: scoreResult.gaps,
+          modelUsed: scoreResult.modelUsed,
+        },
+      });
+    }
+
+    await this.prisma.candidate.update({
+      where: { id: candidate.id },
+      data: { aiScore: scoreResult.score },
+    });
+  }
+
+  /**
+   * TO-58: clear a manual override and return to an AI score. Re-scores the
+   * assigned job immediately; if no job or no CV text, aiScore becomes null.
+   */
+  async revertScore(candidateId: string, tenantId: string): Promise<CandidateResponse> {
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id: candidateId, tenantId },
+      select: {
+        id: true,
+        jobId: true,
+        cvText: true,
+        currentRole: true,
+        yearsExperience: true,
+        skills: true,
+      },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ error: { code: 'NOT_FOUND', message: 'Candidate not found' } });
+    }
+
+    if (candidate.jobId && candidate.cvText && candidate.cvText.trim() !== '') {
+      // Clear the sticky flag first so re-scoring writes are allowed again.
+      await this.prisma.candidate.update({
+        where: { id: candidateId },
+        data: { isScoreOverridden: false },
+      });
+      await this.rescoreAssignedJob({ ...candidate, jobId: candidate.jobId }, tenantId);
+    } else {
+      // No job or no CV text: single atomic write clears the flag and nulls the score.
+      await this.prisma.candidate.update({
+        where: { id: candidateId },
+        data: { isScoreOverridden: false, aiScore: null },
+      });
+    }
+
+    return this.findOne(candidateId, tenantId);
+  }
+
   async saveStageSummary(candidateId: string, stageId: string, summary: string, tenantId: string): Promise<{ success: boolean }> {
     // Verifying candidate ownership essentially
     const candidate = await this.prisma.candidate.findFirst({
