@@ -35,7 +35,7 @@ function makeJob(id: string, payload: ReturnType<typeof mockEmailPayload>) {
 
 describe('IngestionProcessor', () => {
   let processor: IngestionProcessor;
-  let prisma: { emailIntakeLog: { update: jest.Mock; findUnique: jest.Mock }; $transaction: jest.Mock; candidate: { update: jest.Mock }; job: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock }; application: { upsert: jest.Mock }; candidateJobScore: { create: jest.Mock; upsert: jest.Mock } };
+  let prisma: { emailIntakeLog: { update: jest.Mock; findUnique: jest.Mock }; $transaction: jest.Mock; candidate: { update: jest.Mock; updateMany: jest.Mock }; job: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock }; application: { upsert: jest.Mock }; candidateJobScore: { create: jest.Mock; upsert: jest.Mock } };
   let extractionAgent: { extract: jest.Mock };
   let storageService: { upload: jest.Mock; downloadPayload: jest.Mock };
   let dedupService: { check: jest.Mock; insertCandidate: jest.Mock; upsertCandidate: jest.Mock; createFlag: jest.Mock };
@@ -49,7 +49,7 @@ describe('IngestionProcessor', () => {
     prisma = {
       emailIntakeLog: { update: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }) },
       $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof txClient) => Promise<void>) => cb(txClient)),
-      candidate: { update: jest.fn().mockResolvedValue({}) },
+      candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       job: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
       application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id' }) },
       candidateJobScore: { create: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({}) },
@@ -223,7 +223,7 @@ describe('IngestionProcessor', () => {
 
 describe('IngestionProcessor — Phase 5 StorageService', () => {
   let processor: IngestionProcessor;
-  let prisma: { emailIntakeLog: { update: jest.Mock; findUnique: jest.Mock }; $transaction: jest.Mock; candidate: { update: jest.Mock }; job: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock }; application: { upsert: jest.Mock }; candidateJobScore: { create: jest.Mock; upsert: jest.Mock } };
+  let prisma: { emailIntakeLog: { update: jest.Mock; findUnique: jest.Mock }; $transaction: jest.Mock; candidate: { update: jest.Mock; updateMany: jest.Mock }; job: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock }; application: { upsert: jest.Mock }; candidateJobScore: { create: jest.Mock; upsert: jest.Mock } };
   let extractionAgent: { extract: jest.Mock };
   let storageService: { upload: jest.Mock; downloadPayload: jest.Mock };
   let dedupService: { check: jest.Mock; insertCandidate: jest.Mock; upsertCandidate: jest.Mock; createFlag: jest.Mock };
@@ -237,7 +237,7 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
     prisma = {
       emailIntakeLog: { update: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }) },
       $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof txClient) => Promise<void>) => cb(txClient)),
-      candidate: { update: jest.fn().mockResolvedValue({}) },
+      candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       job: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
       application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id' }) },
       candidateJobScore: { create: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({}) },
@@ -359,7 +359,7 @@ describe('IngestionProcessor — Phase 5 StorageService', () => {
 
 describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
   let processor: IngestionProcessor;
-  let prisma: { emailIntakeLog: { update: jest.Mock; findUnique: jest.Mock }; $transaction: jest.Mock; candidate: { update: jest.Mock }; job: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock }; application: { upsert: jest.Mock }; candidateJobScore: { create: jest.Mock; upsert: jest.Mock } };
+  let prisma: { emailIntakeLog: { update: jest.Mock; findUnique: jest.Mock }; $transaction: jest.Mock; candidate: { update: jest.Mock; updateMany: jest.Mock }; job: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock }; application: { upsert: jest.Mock }; candidateJobScore: { create: jest.Mock; upsert: jest.Mock } };
   let extractionAgent: { extract: jest.Mock };
   let storageService: { upload: jest.Mock; downloadPayload: jest.Mock };
   let dedupService: {
@@ -382,7 +382,7 @@ describe('IngestionProcessor — Phase 6 Duplicate Detection', () => {
       $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof txClient) => Promise<void>) => {
         return cb(txClient);
       }),
-      candidate: { update: jest.fn().mockResolvedValue({}) },
+      candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       job: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
       application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id' }) },
       candidateJobScore: { create: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({}) },
@@ -648,7 +648,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
   let prisma: {
     emailIntakeLog: { update: jest.Mock; findUnique: jest.Mock };
     $transaction: jest.Mock;
-    candidate: { update: jest.Mock };
+    candidate: { update: jest.Mock; updateMany: jest.Mock };
     job: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock };
     application: { upsert: jest.Mock };
     candidateJobScore: { create: jest.Mock; upsert: jest.Mock };
@@ -670,7 +670,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
     prisma = {
       emailIntakeLog: { update: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }) },
       $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof txClient) => Promise<void>) => cb(txClient)),
-      candidate: { update: jest.fn().mockResolvedValue({}) },
+      candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       job: {
         findMany: jest.fn().mockResolvedValue([activeJob]),
         findFirst: jest.fn().mockResolvedValue(null),
@@ -972,7 +972,7 @@ describe('IngestionProcessor — Phase 7 Candidate Enrichment & Scoring', () => 
       prisma = {
         emailIntakeLog: { update: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }) },
         $transaction: jest.fn().mockImplementation(async (cb) => cb(txClient)),
-        candidate: { update: jest.fn().mockResolvedValue({}) },
+        candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         job: {
           findMany: jest.fn().mockResolvedValue([job1, job2]),
           findUnique: jest.fn(),
@@ -1129,7 +1129,7 @@ describe('IngestionProcessor — extractCandidateShortIds()', () => {
     const prisma = {
       emailIntakeLog: { update: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }) },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(txClient)),
-      candidate: { update: jest.fn().mockResolvedValue({}) },
+      candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       job: { findMany: jest.fn().mockResolvedValue([]) },
       application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id' }) },
       candidateJobScore: { create: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({}) },
@@ -1212,7 +1212,7 @@ describe('IngestionProcessor — Phase 6 idempotency guard', () => {
     prisma = {
       emailIntakeLog: { update: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }) },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(txClient)),
-      candidate: { update: jest.fn().mockResolvedValue({}) },
+      candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       job: { findMany: jest.fn().mockResolvedValue([]) },
       application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id' }) },
       candidateJobScore: { create: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({}) },
@@ -1306,7 +1306,7 @@ describe('IngestionProcessor — CV Classification Gate', () => {
         findUnique: jest.fn().mockResolvedValue({ candidateId: null, cvFileKey: null }),
       },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(txClient)),
-      candidate: { update: jest.fn().mockResolvedValue({}) },
+      candidate: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       job: { findMany: jest.fn().mockResolvedValue([]) },
       application: { upsert: jest.fn().mockResolvedValue({ id: 'app-id' }) },
       candidateJobScore: { create: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({}) },

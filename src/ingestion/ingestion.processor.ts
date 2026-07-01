@@ -493,8 +493,10 @@ export class IngestionProcessor extends WorkerHost {
     // Update denormalized aiScore once after all jobs scored
     // Only set if we actually scored any jobs (maxAiScore > -1)
     if (maxAiScore > -1) {
-      await this.prisma.candidate.update({
-        where: { id: context.candidateId },
+      // Skip the denormalized write when a recruiter override is sticky (TO-58).
+      // Per-job CandidateJobScore rows above are still written for record-keeping.
+      await this.prisma.candidate.updateMany({
+        where: { id: context.candidateId, isScoreOverridden: false },
         data: { aiScore: maxAiScore },
       });
     }

@@ -374,9 +374,10 @@ export class CandidatesService {
                 },
               });
 
-              // Update denormalized aiScore on candidate
-              await tx.candidate.update({
-                where: { id: candidateId },
+              // Update denormalized aiScore on candidate — skip when a human override is sticky (TO-58).
+              // updateMany makes the guard atomic (no separate read).
+              await tx.candidate.updateMany({
+                where: { id: candidateId, isScoreOverridden: false },
                 data: { aiScore: scoreResult.score },
               });
             }

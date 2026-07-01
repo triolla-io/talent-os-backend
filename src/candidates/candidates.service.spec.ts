@@ -62,7 +62,8 @@ function mockCandidate(overrides: Partial<{
 
 describe('CandidatesService', () => {
   let service: CandidatesService;
-  let prismaMock: { candidate: { findMany: jest.Mock } };
+  // Broadened so per-test cases can attach findFirst/update/updateMany, job, $transaction, etc.
+  let prismaMock: Record<string, any>;
 
   beforeEach(async () => {
     prismaMock = {
@@ -105,6 +106,42 @@ describe('CandidatesService', () => {
       expect(result.candidates[2].cv_readable).toBe(false);
       // cv_text must never leak into the response
       expect((result.candidates[0] as Record<string, unknown>).cv_text).toBeUndefined();
+    });
+  });
+
+  describe('reassignment sticky score', () => {
+    it('guards the denormalized aiScore write with isScoreOverridden: false', async () => {
+      const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+      const tx = {
+        application: {
+          create: jest.fn().mockResolvedValue({ id: 'app-1' }),
+          findFirst: jest.fn().mockResolvedValue({ id: 'app-1' }),
+        },
+        candidate: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany,
+        },
+        candidateJobScore: { create: jest.fn().mockResolvedValue({}) },
+      };
+      // Drive the reassignment branch: existing job differs from dto.job_id.
+      prismaMock.candidate.findFirst = jest
+        .fn()
+        .mockResolvedValue(mockCandidate({ jobId: 'old-job', isScoreOverridden: true, cvText: 'cv' }));
+      prismaMock.jobStage = { findFirst: jest.fn().mockResolvedValue({ id: 'stage-1' }) };
+      prismaMock.job = {
+        findFirst: jest.fn().mockResolvedValue({ id: 'new-job', title: 'Dev', description: 'd', mustHaveSkills: [] }),
+      };
+      prismaMock.$transaction = jest.fn(async (cb: (t: typeof tx) => unknown) => cb(tx));
+
+      await service.updateCandidate('cand-1', { job_id: 'new-job' } as never, TENANT_ID).catch(() => undefined);
+
+      // The denormalized write must be an updateMany scoped to isScoreOverridden: false.
+      expect(updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ isScoreOverridden: false }),
+          data: expect.objectContaining({ aiScore: expect.any(Number) }),
+        }),
+      );
     });
   });
 
