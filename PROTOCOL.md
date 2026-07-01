@@ -1325,8 +1325,6 @@ errors (`isError: true`), not thrown transport errors.
 - **Google token audience check**: the federated login verifies the Google token's `aud`
   matches `GOOGLE_CLIENT_ID` (via `tokeninfo`) before trusting the identity — a token minted
   for another OAuth app cannot be replayed to sign in.
-- **Forced consent**: the Google login always prompts (`consent select_account`), so a lingering
-  Google session can't silently authorize a newly registered MCP client.
 - **Rate limits** (also enforce a Cloudflare WAF rate rule at the edge): `/register`, `/token`,
   `/authorize` → 60 / 15 min per IP; `/mcp-oauth/complete` → 20 / min; `/mcp` → 120 / min.
   Over-limit requests receive `429`.

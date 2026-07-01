@@ -22,15 +22,12 @@ button{font:inherit;padding:10px 18px;border-radius:8px;border:0;background:#4f4
 const SESSION = ${JSON.stringify(loginSessionId)};
 const COMPLETE = ${JSON.stringify(completeUrl)};
 const CLIENT_ID = ${JSON.stringify(googleClientId)};
-function fail(m){document.getElementById('err').textContent = m || 'Sign-in failed';}
+function fail(m){var s=m||'Sign-in failed';try{console.error('[talent-os oauth]',s);}catch(_){}document.getElementById('err').textContent = s;}
 document.getElementById('signin').addEventListener('click', () => {
   try {
     const client = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: 'openid email profile',
-      // Force Google's account chooser + consent every time so a lingering Google session
-      // cookie can't silently authorize a (possibly attacker-registered) MCP client.
-      prompt: 'consent select_account',
       callback: async (resp) => {
         if (!resp || !resp.access_token) return fail('No access token from Google');
         try {
@@ -43,6 +40,8 @@ document.getElementById('signin').addEventListener('click', () => {
           window.location.href = data.redirect;
         } catch (e) { fail(String(e)); }
       },
+      // Surface GIS errors instead of silently closing the popup.
+      error_callback: (err) => fail('Google sign-in failed: ' + ((err && (err.type || err.message)) || 'unknown error')),
     });
     client.requestAccessToken();
   } catch (e) { fail('Google Identity Services not loaded'); }
