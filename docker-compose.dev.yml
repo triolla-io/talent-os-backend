@@ -41,6 +41,32 @@ services:
       redis:
         condition: service_healthy
 
+  mcp:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: sh -c "npm install && npx prisma generate && npx ts-node src/mcp.ts"
+    ports:
+      - '3100:3100'
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://triolla:${POSTGRES_PASSWORD}@postgres:5432/triolla
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+      TZ: Asia/Jerusalem
+      PORT: 3100
+      MCP_PUBLIC_URL: http://localhost:3100
+      JWT_SECRET: ${JWT_SECRET}
+      # MCP_JWT_SECRET (≥32 chars, DISTINCT from JWT_SECRET) + GOOGLE_CLIENT_ID come from .env
+      MCP_JWT_SECRET: ${MCP_JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     ports:
