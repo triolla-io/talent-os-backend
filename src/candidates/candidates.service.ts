@@ -115,6 +115,8 @@ export class CandidatesService {
         source: true,
         sourceAgency: true,
         yearsExperience: true,
+        salaryExpectationMin: true,
+        salaryExpectationMax: true,
         aiSummary: true,
         aiScore: true,
         cvText: true,
@@ -156,6 +158,8 @@ export class CandidatesService {
         location: c.location,
         cv_file_url: c.cvFileUrl,
         years_experience: c.yearsExperience,
+        salary_expectation_min: c.salaryExpectationMin,
+        salary_expectation_max: c.salaryExpectationMax,
         ai_summary: c.aiSummary,
         source: c.source,
         source_agency: c.sourceAgency,
@@ -208,6 +212,8 @@ export class CandidatesService {
         jobId: true,
         hiringStageId: true,
         yearsExperience: true,
+        salaryExpectationMin: true,
+        salaryExpectationMax: true,
         aiSummary: true,
         aiScore: true,
         cvText: true,
@@ -261,6 +267,8 @@ export class CandidatesService {
       ai_summary: c.aiSummary,
       is_duplicate: c.duplicateFlags.length > 0,
       years_experience: c.yearsExperience,
+      salary_expectation_min: c.salaryExpectationMin,
+      salary_expectation_max: c.salaryExpectationMax,
       skills: c.skills,
       status: c.status,
       is_rejected: c.status === 'rejected',
@@ -295,6 +303,8 @@ export class CandidatesService {
     if (dto.current_role !== undefined) updateData.currentRole = dto.current_role;
     if (dto.location !== undefined) updateData.location = dto.location;
     if (dto.years_experience !== undefined) updateData.yearsExperience = dto.years_experience;
+    if (dto.salary_expectation_min !== undefined) updateData.salaryExpectationMin = dto.salary_expectation_min;
+    if (dto.salary_expectation_max !== undefined) updateData.salaryExpectationMax = dto.salary_expectation_max;
     if (dto.ai_score !== undefined) {
       updateData.aiScore = dto.ai_score;
       updateData.isScoreOverridden = true;
@@ -969,6 +979,8 @@ export class CandidatesService {
           currentRole: dto.current_role ?? null,
           location: dto.location ?? null,
           yearsExperience: dto.years_experience ?? null,
+          salaryExpectationMin: dto.salary_expectation_min ?? null,
+          salaryExpectationMax: dto.salary_expectation_max ?? null,
           skills: dto.skills ?? [],
           cvText: null, // D-02: null for manual adds
           cvFileUrl,
@@ -1004,6 +1016,8 @@ export class CandidatesService {
       current_role: candidate.currentRole,
       location: candidate.location,
       years_experience: candidate.yearsExperience,
+      salary_expectation_min: candidate.salaryExpectationMin,
+      salary_expectation_max: candidate.salaryExpectationMax,
       skills: candidate.skills,
       cv_file_url: candidate.cvFileUrl,
       source: candidate.source,

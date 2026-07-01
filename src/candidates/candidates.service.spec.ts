@@ -167,6 +167,41 @@ describe('CandidatesService', () => {
     });
   });
 
+  describe('salary expectation update', () => {
+    it('writes salaryExpectationMin/Max to updateData', async () => {
+      const update = jest.fn().mockResolvedValue({});
+      prismaMock.candidate.findFirst = jest.fn().mockResolvedValue(mockCandidate({ jobId: 'job-1' }));
+      prismaMock.candidate.update = update;
+      prismaMock.candidate.findMany = jest.fn().mockResolvedValue([mockCandidate()]);
+
+      await service.updateCandidate(
+        'cand-1',
+        { salary_expectation_min: 10000, salary_expectation_max: 15000 } as never,
+        TENANT_ID,
+      );
+
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'cand-1' },
+          data: expect.objectContaining({ salaryExpectationMin: 10000, salaryExpectationMax: 15000 }),
+        }),
+      );
+    });
+
+    it('clears a bound when null is passed', async () => {
+      const update = jest.fn().mockResolvedValue({});
+      prismaMock.candidate.findFirst = jest.fn().mockResolvedValue(mockCandidate({ jobId: 'job-1' }));
+      prismaMock.candidate.update = update;
+      prismaMock.candidate.findMany = jest.fn().mockResolvedValue([mockCandidate()]);
+
+      await service.updateCandidate('cand-1', { salary_expectation_min: null } as never, TENANT_ID);
+
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ salaryExpectationMin: null }) }),
+      );
+    });
+  });
+
   describe('revertScore', () => {
     it('clears the flag and nulls aiScore when there is no assigned job', async () => {
       const update = jest.fn().mockResolvedValue({});
@@ -573,6 +608,31 @@ describe('CandidatesService.createCandidate()', () => {
   it('should propagate error if Application create fails inside transaction', async () => {
     mockPrisma.$transaction.mockRejectedValue(new Error('DB error'));
     await expect(service.createCandidate(BASE_DTO, undefined, TENANT_ID)).rejects.toThrow('DB error');
+  });
+
+  it('persists salary expectation on create and returns it', async () => {
+    // Echo the create data so the response reflects what was written (mirrors DB round-trip).
+    mockPrisma.$transaction.mockImplementation(async (fn: any) =>
+      fn({
+        candidate: {
+          create: jest.fn().mockImplementation(async ({ data }: any) => ({
+            ...data,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })),
+        },
+        application: { create: jest.fn().mockResolvedValue({ id: 'app-uuid' }) },
+      }),
+    );
+
+    const res = await service.createCandidate(
+      { ...BASE_DTO, salary_expectation_min: 10000, salary_expectation_max: 15000 } as any,
+      undefined,
+      TENANT_ID,
+    );
+
+    expect(res.salary_expectation_min).toBe(10000);
+    expect(res.salary_expectation_max).toBe(15000);
   });
 
   // Tenant Isolation Test

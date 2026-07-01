@@ -35,6 +35,8 @@ export interface CandidateResponse {
   rejection_note: string | null;
   stage_summaries: Record<string, string>;
   years_experience: number | null;
+  salary_expectation_min: number | null;
+  salary_expectation_max: number | null;
 }
 
 /**
