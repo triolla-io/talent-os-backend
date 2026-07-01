@@ -76,7 +76,7 @@ export class PmBridgeService {
     const validation = await this.pmAi.validate({ brief: req.brief, board, decisions });
 
     if (validation.status === 'clean') {
-      const { keys } = await this.buildAndFile(req.brief);
+      const { keys } = await this.buildAndFile(req.brief, createdBy);
       this.logger.log(`PM Bridge filed ${keys.length} issue(s): ${keys.join(', ')}`);
       return { type: 'filed' };
     }
@@ -107,7 +107,8 @@ export class PmBridgeService {
     if (hold.status !== 'pending') return { status: 'already_resolved' };
 
     const brief = hold.brief as unknown as InternalBrief;
-    const { keys } = await this.buildAndFile(brief);
+    // Reporter is the PM who originally filed the request, not whoever clicks the approve link.
+    const { keys } = await this.buildAndFile(brief, hold.createdBy);
     await this.prisma.pmHeldRequest.update({
       where: { id: itemId },
       data: { status: 'approved', jiraKeys: keys as unknown as Prisma.InputJsonValue, resolvedAt: new Date() },
@@ -129,9 +130,9 @@ export class PmBridgeService {
     return { status: 'rejected' };
   }
 
-  private async buildAndFile(brief: InternalBrief): Promise<{ keys: string[] }> {
+  private async buildAndFile(brief: InternalBrief, reporterEmail?: string): Promise<{ keys: string[] }> {
     const plan = await this.pmAi.decompose({ brief });
-    return this.jiraGateway.createIssueTree(plan.root);
+    return this.jiraGateway.createIssueTree(plan.root, reporterEmail);
   }
 
   private async createHold(input: {

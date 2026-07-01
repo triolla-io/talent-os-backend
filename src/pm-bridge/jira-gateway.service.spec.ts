@@ -7,10 +7,12 @@ const TOKEN = 'secret-token';
 const PROJECT_KEY = 'TP';
 const EXPECTED_AUTH = `Basic ${Buffer.from(`${EMAIL}:${TOKEN}`).toString('base64')}`;
 
-function makeService(overrides: Record<string, string | undefined> = {}) {
+function makeService(overrides: Record<string, string | number | undefined> = {}) {
   const config = {
     get: jest.fn((key: string) => {
-      const vals: Record<string, string | undefined> = {
+      // Numeric env (JIRA_BOARD_ID/JIRA_SPRINT_ID) is coerced to a number by zod in production,
+      // so the fake config returns numbers for those to mirror ConfigService faithfully.
+      const vals: Record<string, string | number | undefined> = {
         JIRA_BASE_URL: BASE_URL,
         JIRA_EMAIL: EMAIL,
         JIRA_API_TOKEN: TOKEN,
@@ -87,6 +89,112 @@ describe('JiraGatewayService.createIssueTree', () => {
     expect(bodies[1].fields.parent).toEqual({ key: 'TO-10' });
     expect(bodies[2].fields.parent).toEqual({ key: 'TO-11' });
     expect(bodies[2].fields.issuetype).toEqual({ name: 'Subtask' });
+  });
+});
+
+describe('JiraGatewayService.createIssueTree — reporter', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('sets the reporter to the resolved accountId of the filer email', async () => {
+    const gw = makeService({ JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID: 'acc-daniel' });
+    jest.spyOn(global, 'fetch').mockImplementation((url: any) => {
+      const u = String(url);
+      if (u.includes('/user/search')) return Promise.resolve(okJson([{ accountId: 'acc-yuval' }]));
+      return Promise.resolve(okJson({ key: 'TO-20' }));
+    });
+
+    await gw.createIssueTree(
+      { issueType: 'Task', summary: 'S', description: 'd', acceptanceCriteria: [], subtasks: [], children: [] },
+      'yuval@triolla.io',
+    );
+
+    const fetchMock = global.fetch as unknown as jest.SpyInstance;
+    // The user-search call carries the filer's email
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('query=yuval%40triolla.io'))).toBe(true);
+    // The created issue reports the resolved filer, not the token owner
+    const createBody = JSON.parse(
+      (fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/rest/api/3/issue'))![1] as any).body,
+    );
+    expect(createBody.fields.reporter).toEqual({ accountId: 'acc-yuval' });
+    // Assignee stays the configured default (the dev who does the work)
+    expect(createBody.fields.assignee).toEqual({ accountId: 'acc-daniel' });
+  });
+
+  it('omits the reporter when no filer email is given', async () => {
+    const gw = makeService({ JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID: 'acc-daniel' });
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(okJson({ key: 'TO-21' }));
+    await gw.createIssueTree({ issueType: 'Task', summary: 'S', description: 'd', acceptanceCriteria: [], subtasks: [], children: [] });
+    const createBody = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+    expect(createBody.fields.reporter).toBeUndefined();
+  });
+
+  it('refiles without the reporter when Jira rejects the reporter field, still creating the issue', async () => {
+    const gw = makeService({ JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID: 'acc-daniel' });
+    let createAttempts = 0;
+    jest.spyOn(global, 'fetch').mockImplementation((url: any) => {
+      const u = String(url);
+      if (u.includes('/user/search')) return Promise.resolve(okJson([{ accountId: 'acc-yuval' }]));
+      createAttempts += 1;
+      if (createAttempts === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          text: async () => '{"errors":{"reporter":"Field \'reporter\' cannot be set."}}',
+        } as any);
+      }
+      return Promise.resolve(okJson({ key: 'TO-22' }));
+    });
+
+    const res = await gw.createIssueTree(
+      { issueType: 'Task', summary: 'S', description: 'd', acceptanceCriteria: [], subtasks: [], children: [] },
+      'yuval@triolla.io',
+    );
+
+    expect(res.keys).toEqual(['TO-22']);
+    expect(createAttempts).toBe(2);
+    const fetchMock = global.fetch as unknown as jest.SpyInstance;
+    const retryBody = JSON.parse(
+      (fetchMock.mock.calls.filter((c) => String(c[0]).endsWith('/rest/api/3/issue'))[1][1] as any).body,
+    );
+    expect(retryBody.fields.reporter).toBeUndefined();
+  });
+});
+
+describe('JiraGatewayService.createIssueTree — sprint', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('resolves the active sprint from JIRA_BOARD_ID and sets it on non-subtask issues only', async () => {
+    const gw = makeService({ JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID: 'acc', JIRA_BOARD_ID: 137 });
+    const keys = ['TO-30', 'TO-31'];
+    jest.spyOn(global, 'fetch').mockImplementation((url: any) => {
+      const u = String(url);
+      if (u.includes('/board/137/sprint')) return Promise.resolve(okJson({ values: [{ id: 447 }] }));
+      return Promise.resolve(okJson({ key: keys.shift() }));
+    });
+
+    await gw.createIssueTree({
+      issueType: 'Task', summary: 'S', description: 'd', acceptanceCriteria: [],
+      children: [], subtasks: [{ summary: 'sub', description: 'd' }],
+    });
+
+    const fetchMock = global.fetch as unknown as jest.SpyInstance;
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/board/137/sprint?state=active'))).toBe(true);
+    const createBodies = fetchMock.mock.calls
+      .filter((c) => String(c[0]).endsWith('/rest/api/3/issue'))
+      .map((c) => JSON.parse((c[1] as any).body));
+    // parent Task carries the sprint; the Subtask does not (it inherits the parent's sprint)
+    expect(createBodies[0].fields.customfield_10020).toBe(447);
+    expect(createBodies[1].fields.issuetype).toEqual({ name: 'Subtask' });
+    expect(createBodies[1].fields.customfield_10020).toBeUndefined();
+  });
+
+  it('an explicit JIRA_SPRINT_ID overrides the board lookup (no agile call)', async () => {
+    const gw = makeService({ JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID: 'acc', JIRA_BOARD_ID: 137, JIRA_SPRINT_ID: 999 });
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(okJson({ key: 'TO-40' }));
+    await gw.createIssueTree({ issueType: 'Task', summary: 'S', description: 'd', acceptanceCriteria: [], subtasks: [], children: [] });
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/sprint'))).toBe(false);
+    const createBody = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+    expect(createBody.fields.customfield_10020).toBe(999);
   });
 });
 

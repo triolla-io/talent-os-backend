@@ -30,6 +30,17 @@ interface JiraCreateResponse {
   key: string;
 }
 
+// Re-check the board's active sprint at most this often. A long-running API would otherwise
+// pin the sprint resolved at boot and keep filing into a sprint that has since closed.
+const ACTIVE_SPRINT_TTL_MS = 5 * 60 * 1000;
+
+// The per-issue context resolved once per createIssueTree and applied to every issue in the tree.
+interface IssueContext {
+  assignee: { accountId: string } | null;
+  reporter: { accountId: string } | null;
+  sprintId: number | undefined;
+}
+
 @Injectable()
 export class JiraGatewayService {
   private readonly logger = new Logger(JiraGatewayService.name);
@@ -37,8 +48,12 @@ export class JiraGatewayService {
   private readonly projectKey: string;
   private readonly authHeader: string;
   private readonly sprintId: number | undefined;
+  private readonly boardId: number | undefined;
   // undefined = not yet resolved; null = no assignee configured/found
   private assigneeCache: { accountId: string } | null | undefined = undefined;
+  // email (lowercased) → resolved reporter, cached so repeat filers skip the user-search call.
+  private readonly reporterCache = new Map<string, { accountId: string } | null>();
+  private activeSprintCache: { id: number | undefined; at: number } | undefined;
 
   constructor(private readonly config: ConfigService) {
     this.baseUrl = config.get<string>('JIRA_BASE_URL')!.replace(/\/$/, '');
@@ -48,6 +63,7 @@ export class JiraGatewayService {
     const token = config.get<string>('JIRA_API_TOKEN')!;
     this.authHeader = `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
     this.sprintId = config.get<number>('JIRA_SPRINT_ID');
+    this.boardId = config.get<number>('JIRA_BOARD_ID');
   }
 
   async readBoard(): Promise<CondensedTicket[]> {
@@ -101,28 +117,81 @@ export class JiraGatewayService {
       return null;
     }
 
+    const accountId = await this.lookupAccountIdByEmail(email);
+    this.assigneeCache = accountId ? { accountId } : null;
+    return this.assigneeCache;
+  }
+
+  // The reporter is the PM who actually filed the request (their app-login email), NOT the Jira
+  // API-token owner. Left unset, Jira stamps the token owner (daniel.s) as reporter on every
+  // issue, misattributing work filed by other allowlisted PMs (e.g. Yuval). Returns null when no
+  // email is provided or the user can't be resolved, in which case Jira falls back to the default.
+  async resolveReporter(email?: string): Promise<{ accountId: string } | null> {
+    if (!email) return null;
+    const key = email.toLowerCase();
+    const cached = this.reporterCache.get(key);
+    if (cached !== undefined) return cached;
+
+    const accountId = await this.lookupAccountIdByEmail(email);
+    if (!accountId) {
+      this.logger.warn(`No Jira user found for reporter ${email} — leaving reporter as the API token owner`);
+    }
+    const result = accountId ? { accountId } : null;
+    this.reporterCache.set(key, result);
+    return result;
+  }
+
+  // Route new issues into the board's *currently active* sprint, resolved live so it keeps
+  // working across sprint rollovers with no config change. An explicit JIRA_SPRINT_ID overrides
+  // the lookup (escape hatch); without a board configured, issues fall to the backlog as before.
+  async resolveActiveSprintId(): Promise<number | undefined> {
+    if (this.sprintId) return this.sprintId;
+    if (!this.boardId) return undefined;
+
+    const now = Date.now();
+    if (this.activeSprintCache && now - this.activeSprintCache.at < ACTIVE_SPRINT_TTL_MS) {
+      return this.activeSprintCache.id;
+    }
+
+    const res = await fetch(`${this.baseUrl}/rest/agile/1.0/board/${this.boardId}/sprint?state=active`, {
+      method: 'GET',
+      headers: { Authorization: this.authHeader, Accept: 'application/json' },
+    });
+    if (!res.ok) {
+      this.logger.error(`Jira active-sprint lookup failed for board ${this.boardId}: ${res.status}`);
+      // Don't cache a failure — retry on the next filing rather than backlog for the whole TTL.
+      return undefined;
+    }
+    const data = (await res.json()) as { values?: Array<{ id: number }> };
+    const id = data.values?.[0]?.id;
+    if (!id) this.logger.warn(`No active sprint on board ${this.boardId} — new issues will land in the backlog`);
+    this.activeSprintCache = { id, at: now };
+    return id;
+  }
+
+  private async lookupAccountIdByEmail(email: string): Promise<string | null> {
     const res = await fetch(`${this.baseUrl}/rest/api/3/user/search?query=${encodeURIComponent(email)}`, {
       method: 'GET',
       headers: { Authorization: this.authHeader, Accept: 'application/json' },
     });
     if (!res.ok) {
-      this.logger.error(`Jira user search failed: ${res.status}`);
-      this.assigneeCache = null;
+      this.logger.error(`Jira user search failed for ${email}: ${res.status}`);
       return null;
     }
     const users = (await res.json()) as Array<{ accountId: string }>;
-    this.assigneeCache = users.length ? { accountId: users[0].accountId } : null;
-    return this.assigneeCache;
+    return users.length ? users[0].accountId : null;
   }
 
-  private async createOne(input: {
-    issueType: string;
-    summary: string;
-    description: string;
-    acceptanceCriteria: string[];
-    parentKey?: string;
-  }): Promise<JiraIssueResult> {
-    const assignee = await this.resolveAssignee();
+  private async createOne(
+    input: {
+      issueType: string;
+      summary: string;
+      description: string;
+      acceptanceCriteria: string[];
+      parentKey?: string;
+    },
+    ctx: IssueContext,
+  ): Promise<JiraIssueResult> {
     const fields: Record<string, unknown> = {
       project: { key: this.projectKey },
       issuetype: { name: input.issueType },
@@ -130,64 +199,103 @@ export class JiraGatewayService {
       description: toAdf(input.description, input.acceptanceCriteria),
     };
     if (input.parentKey) fields.parent = { key: input.parentKey };
-    if (assignee) fields.assignee = assignee;
+    if (ctx.assignee) fields.assignee = ctx.assignee;
+    if (ctx.reporter) fields.reporter = ctx.reporter;
     // Sub-tasks inherit the parent's sprint; only set sprint on standalone/standard issues.
-    if (this.sprintId && input.issueType !== 'Subtask') fields.customfield_10020 = this.sprintId;
+    if (ctx.sprintId && input.issueType !== 'Subtask') fields.customfield_10020 = ctx.sprintId;
 
+    const key = await this.postIssue(fields, input.issueType);
+    return { key, url: `${this.baseUrl}/browse/${key}` };
+  }
+
+  private async postIssue(fields: Record<string, unknown>, issueType: string): Promise<string> {
     const res = await fetch(`${this.baseUrl}/rest/api/3/issue`, {
       method: 'POST',
       headers: { Authorization: this.authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ fields }),
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      this.logger.error(`Jira createIssue (${input.issueType}) failed: ${res.status} — ${text}`);
-      throw this.jiraError(`Failed to create Jira issue: ${res.status}`, text);
+    if (res.ok) {
+      const data = (await res.json()) as JiraCreateResponse;
+      return data.key;
     }
-    const data = (await res.json()) as JiraCreateResponse;
-    return { key: data.key, url: `${this.baseUrl}/browse/${data.key}` };
+
+    const text = await res.text().catch(() => '');
+    // Best-effort reporter: if the API token lacks the "Modify Reporter" project permission, Jira
+    // rejects the reporter field. Rather than lose the ticket, refile once without it (still filed,
+    // just reported as the token owner) and warn loudly so the permission can be granted.
+    if (fields.reporter && text.includes('reporter')) {
+      this.logger.warn(
+        `Jira rejected the reporter field (${res.status}) — refiling ${issueType} without it. ` +
+          `Grant "Modify Reporter" in project ${this.projectKey} to attribute PM Bridge issues to the filer.`,
+      );
+      const { reporter: _reporter, ...withoutReporter } = fields;
+      return this.postIssue(withoutReporter, issueType);
+    }
+
+    this.logger.error(`Jira createIssue (${issueType}) failed: ${res.status} — ${text}`);
+    throw this.jiraError(`Failed to create Jira issue: ${res.status}`, text);
   }
 
-  async createIssueTree(root: DecomposedRoot): Promise<{ keys: string[] }> {
+  async createIssueTree(root: DecomposedRoot, reporterEmail?: string): Promise<{ keys: string[] }> {
+    // Resolve assignee, reporter, and the active sprint once per tree; every issue reuses them.
+    const [assignee, reporter, sprintId] = await Promise.all([
+      this.resolveAssignee(),
+      this.resolveReporter(reporterEmail),
+      this.resolveActiveSprintId(),
+    ]);
+    const ctx: IssueContext = { assignee, reporter, sprintId };
+
     const keys: string[] = [];
-    const rootRes = await this.createOne({
-      issueType: root.issueType,
-      summary: root.summary,
-      description: root.description,
-      acceptanceCriteria: root.acceptanceCriteria,
-    });
+    const rootRes = await this.createOne(
+      {
+        issueType: root.issueType,
+        summary: root.summary,
+        description: root.description,
+        acceptanceCriteria: root.acceptanceCriteria,
+      },
+      ctx,
+    );
     keys.push(rootRes.key);
 
     if (root.issueType === 'Epic') {
       for (const child of root.children) {
-        const childRes = await this.createOne({
-          issueType: child.issueType,
-          summary: child.summary,
-          description: child.description,
-          acceptanceCriteria: child.acceptanceCriteria,
-          parentKey: rootRes.key,
-        });
+        const childRes = await this.createOne(
+          {
+            issueType: child.issueType,
+            summary: child.summary,
+            description: child.description,
+            acceptanceCriteria: child.acceptanceCriteria,
+            parentKey: rootRes.key,
+          },
+          ctx,
+        );
         keys.push(childRes.key);
         for (const st of child.subtasks) {
-          const stRes = await this.createOne({
-            issueType: 'Subtask',
-            summary: st.summary,
-            description: st.description,
-            acceptanceCriteria: [],
-            parentKey: childRes.key,
-          });
+          const stRes = await this.createOne(
+            {
+              issueType: 'Subtask',
+              summary: st.summary,
+              description: st.description,
+              acceptanceCriteria: [],
+              parentKey: childRes.key,
+            },
+            ctx,
+          );
           keys.push(stRes.key);
         }
       }
     } else {
       for (const st of root.subtasks) {
-        const stRes = await this.createOne({
-          issueType: 'Subtask',
-          summary: st.summary,
-          description: st.description,
-          acceptanceCriteria: [],
-          parentKey: rootRes.key,
-        });
+        const stRes = await this.createOne(
+          {
+            issueType: 'Subtask',
+            summary: st.summary,
+            description: st.description,
+            acceptanceCriteria: [],
+            parentKey: rootRes.key,
+          },
+          ctx,
+        );
         keys.push(stRes.key);
       }
     }

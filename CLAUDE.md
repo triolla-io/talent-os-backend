@@ -65,7 +65,8 @@ SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / SMTP_FROM   # outbound auth emai
 JIRA_BASE_URL                 # https://triolla.atlassian.net
 JIRA_EMAIL / JIRA_API_TOKEN   # Basic auth (token never logged)
 JIRA_PROJECT_KEY              # default: TO
-JIRA_SPRINT_ID                # optional — new issues auto-added to this sprint
+JIRA_BOARD_ID                 # board whose *active* sprint new issues join, resolved live (e.g. 137)
+JIRA_SPRINT_ID                # optional override — pin issues to a fixed sprint instead of the active one
 PM_BRIDGE_ALLOWLIST           # comma-separated emails allowed to use PM Bridge (default: none)
 PM_BRIDGE_MODEL               # OpenRouter model for draft+validate (default: anthropic/claude-sonnet-4.6)
 JIRA_DEFAULT_ASSIGNEE_ACCOUNT_ID  # Jira accountId every issue is assigned to (Daniel)

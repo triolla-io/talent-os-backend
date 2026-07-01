@@ -31,6 +31,9 @@ export const envSchema = z.object({
   JIRA_EMAIL: z.string().min(1).optional(),
   JIRA_API_TOKEN: z.string().min(1).optional(),
   JIRA_PROJECT_KEY: z.string().default('TO'),
+  // Board whose *active* sprint new PM Bridge issues are added to (resolved live each filing).
+  JIRA_BOARD_ID: z.coerce.number().int().positive().optional(),
+  // Optional override: pin issues to a fixed sprint id instead of the board's active sprint.
   JIRA_SPRINT_ID: z.coerce.number().int().positive().optional(),
   PM_BRIDGE_ALLOWLIST: z.string().default(''),
   PM_BRIDGE_MODEL: z.string().default('anthropic/claude-sonnet-4.6'),

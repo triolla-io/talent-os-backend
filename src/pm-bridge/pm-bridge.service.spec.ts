@@ -65,11 +65,12 @@ describe('PmBridgeService.converse', () => {
 });
 
 describe('PmBridgeService.commit', () => {
-  it('clean → builds the tree and files', async () => {
+  it('clean → builds the tree and files, reporting the filer', async () => {
     const { svc, ai, jira } = make();
     ai.validate.mockResolvedValue({ status: 'clean', duplicateOfKey: null, reasonPlain: '', related: [], conflictingDecisionIds: [] });
-    const r = await svc.commit({ brief, page }, 'tenant-1', 'pm@x.com');
-    expect(jira.createIssueTree).toHaveBeenCalled();
+    const r = await svc.commit({ brief, page }, 'tenant-1', 'yuval@triolla.io');
+    // second arg is the reporter email so Jira attributes the issue to the PM who filed it
+    expect(jira.createIssueTree).toHaveBeenCalledWith(expect.anything(), 'yuval@triolla.io');
     expect(r).toEqual({ type: 'filed' });
   });
 
@@ -94,11 +95,12 @@ describe('PmBridgeService.commit', () => {
 });
 
 describe('PmBridgeService.approveHold / rejectHold', () => {
-  it('approve builds the stored brief and marks approved', async () => {
+  it('approve builds the stored brief and marks approved, reporting the original filer', async () => {
     const { svc, prisma, jira } = make();
-    prisma.pmHeldRequest.findUnique.mockResolvedValue({ id: 'hold-1', status: 'pending', brief });
+    prisma.pmHeldRequest.findUnique.mockResolvedValue({ id: 'hold-1', status: 'pending', brief, createdBy: 'yuval@triolla.io' });
     const r = await svc.approveHold('hold-1');
-    expect(jira.createIssueTree).toHaveBeenCalled();
+    // reporter = who originally filed the hold, not whoever clicks approve
+    expect(jira.createIssueTree).toHaveBeenCalledWith(expect.anything(), 'yuval@triolla.io');
     expect(prisma.pmHeldRequest.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'approved' }) }));
     expect(r.status).toBe('approved');
   });
