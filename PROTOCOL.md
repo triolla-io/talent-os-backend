@@ -1250,3 +1250,72 @@ and returns an HTML result page.
 
 ### GET/POST /pm-bridge/decisions · PATCH /pm-bridge/decisions/:id
 Unchanged from the existing decisions contract.
+
+---
+
+## MCP Server (talent-os-mcp)
+
+A third deployable app (entry point `src/mcp.ts`, `Dockerfile.mcp`) that lets a Talent OS
+user connect Claude (or any MCP client) as a recruiter copilot over **their own org's data**.
+It reuses the backend's services in-process — no HTTP hop — and is scoped per-tenant and
+per-role on every call.
+
+- **Base URL**: `https://mcp.talentos.triolla.io` (local dev: `http://localhost:3100`)
+- **Transport**: MCP Streamable HTTP (stateless) at `POST /mcp`. `GET`/`DELETE /mcp` → `405`.
+- **Health**: `GET /healthz` → `{ "status": "ok" }`.
+
+### Authentication — OAuth 2.1 (DCR + PKCE), federated to Google
+
+The server is its own OAuth 2.1 authorization server (via the MCP SDK's `mcpAuthRouter`) and
+federates the actual login to Talent OS's existing Google sign-in.
+
+- **Discovery**:
+  - `GET /.well-known/oauth-authorization-server` — AS metadata (`authorization_endpoint`,
+    `token_endpoint`, `registration_endpoint`, …).
+  - `GET /.well-known/oauth-protected-resource/mcp` — protected-resource metadata.
+- **Dynamic Client Registration**: `POST /register` (clients stored in Redis, 90-day TTL).
+- **Authorize**: `GET /authorize` (PKCE `code_challenge` required) → renders a Google login
+  page. The browser obtains a Google access token and `POST`s it to `/mcp-oauth/complete`,
+  which resolves the user, mints a one-time authorization code (Redis, 60s TTL), and redirects
+  back to the client with `?code=…&state=…`.
+- **Token**: `POST /token` — exchanges the code (PKCE `code_verifier` verified by the SDK) for
+  an access token (15 min) + refresh token (30 days, stored in Redis). `grant_type=refresh_token`
+  is supported.
+- **Bearer**: `POST /mcp` requires `Authorization: Bearer <access_token>`. Missing/invalid →
+  `401` with a `WWW-Authenticate` challenge pointing at the protected-resource metadata.
+
+**Token isolation**: MCP access/refresh tokens are JWTs signed with a **dedicated
+`MCP_JWT_SECRET`** (distinct from the SPA's `JWT_SECRET`) and carry `scope: "mcp"` plus an
+`aud` equal to `MCP_PUBLIC_URL`. Because the secret is separate, an MCP token can never be
+replayed against the SPA's `SessionGuard`, and an SPA session token can never be used at `/mcp`.
+Token claims: `{ sub, org, role, scope: "mcp", aud }`. Every tool call runs with
+`tenantId = token.org`.
+
+### Roles
+
+`viewer` = read-only (read tools only). `member` / `admin` / `owner` = read + write + AI.
+Write and AI tools return a tool error for `viewer` callers.
+
+### Tools
+
+| Tool | Kind | Role | What it does |
+|------|------|------|--------------|
+| `search_candidates` | read | any | Search candidates in the org (`q`, `filter`, `job_id`, `unassigned`) + total. No CV text. |
+| `get_candidate` | read | any | Fetch one candidate by id (no CV text). |
+| `get_candidate_cv` | read | any | Short-lived presigned URL to the original CV file (never raw text). |
+| `list_jobs` | read | any | List jobs (optional `status`) + total. |
+| `get_job` | read | any | Fetch one job by id. |
+| `get_pipeline` | read | any | Candidates in a job's hiring pipeline (by stage). |
+| `dashboard_counts` | read | any | Org summary counts: total, duplicates, unassigned. |
+| `move_candidate_stage` | write | member+ | Move a candidate to a hiring stage. |
+| `reject_candidate` | write | member+ | Reject a candidate with a reason + optional note. |
+| `update_candidate` | write | member+ | Update candidate fields (or reassign job → auto-rescore). |
+| `add_stage_summary` | write | member+ | Save a recruiter summary note at a hiring stage. |
+| `create_job` | write | member+ | Create a job (`title` required). |
+| `update_job` | write | member+ | Update a job by id. |
+| `rescore_candidate` | AI | member+ | Re-run AI scoring vs the assigned job; returns score/reasoning/strengths/gaps (inline). |
+| `summarize_candidate` | AI | member+ | Generate an AI summary of a candidate (inline). |
+
+Write tools carry MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`) so MCP
+clients can prompt for per-call approval. Tool failures are returned as structured MCP tool
+errors (`isError: true`), not thrown transport errors.
