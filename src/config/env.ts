@@ -44,6 +44,8 @@ export const envSchema = z.object({
   PM_HOLD_NOTIFY_EMAIL: z.string().min(1).default('daniel.s@triolla.io'),
   PM_HOLD_TOKEN_SECRET: z.string().min(32, 'PM_HOLD_TOKEN_SECRET must be at least 32 characters').optional(),
   API_PUBLIC_URL: z.url().optional(),
+  MCP_PUBLIC_URL: z.url().optional(),
+  MCP_JWT_SECRET: z.string().min(32, 'MCP_JWT_SECRET must be at least 32 characters').optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -60,3 +62,14 @@ export const apiEnvSchema = envSchema.extend({
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;
+
+// MCP-process schema — MCP public URL and its dedicated signing secret are required
+// (the MCP token secret is intentionally distinct from JWT_SECRET so MCP tokens can
+// never be replayed against the SPA's SessionGuard).
+export const mcpEnvSchema = envSchema.extend({
+  MCP_PUBLIC_URL: z.url(),
+  MCP_JWT_SECRET: z.string().min(32, 'MCP_JWT_SECRET must be at least 32 characters'),
+  GOOGLE_CLIENT_ID: z.string().min(1),
+});
+
+export type McpEnv = z.infer<typeof mcpEnvSchema>;
