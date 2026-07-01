@@ -63,6 +63,31 @@ export class StorageService {
     return getSignedUrl(this.s3Client, command, { expiresIn });
   }
 
+  /**
+   * Fetch an object's raw bytes from R2. Used to stream CV files back to the
+   * browser same-origin (so the client can `fetch().arrayBuffer()` them for
+   * in-browser rendering without depending on R2 CORS). CV files are small, so
+   * buffering the whole object is fine.
+   */
+  async getObject(key: string): Promise<{ body: Buffer; contentType: string }> {
+    const response = await this.s3Client.send(
+      new GetObjectCommand({
+        Bucket: this.config.get<string>('R2_BUCKET_NAME')!,
+        Key: key,
+      }),
+    );
+    if (!response.Body) {
+      // A successful GetObject always carries a Body stream; guard so an edge/empty
+      // response surfaces a clear error instead of a raw "undefined" TypeError.
+      throw new Error(`R2 object ${key} returned no body`);
+    }
+    const bytes = await response.Body.transformToByteArray();
+    return {
+      body: Buffer.from(bytes),
+      contentType: response.ContentType ?? 'application/octet-stream',
+    };
+  }
+
   // Upload from a raw buffer (used for UI-uploaded files)
   // D-02: cv_text stays null; returns R2 object key only (not presigned URL)
   async uploadFromBuffer(buffer: Buffer, mimetype: string, tenantId: string, candidateId: string): Promise<string> {

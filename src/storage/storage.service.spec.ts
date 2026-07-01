@@ -248,4 +248,43 @@ describe('StorageService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('getObject', () => {
+    it('fetches raw bytes as a Buffer plus the stored ContentType', async () => {
+      const raw = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"
+      const transformToByteArray = jest.fn().mockResolvedValue(raw);
+      mockS3Send.mockResolvedValue({
+        Body: { transformToByteArray },
+        ContentType: 'application/pdf',
+      });
+
+      const result = await service.getObject('cvs/tenant-1/msg-1.pdf');
+
+      expect(Buffer.isBuffer(result.body)).toBe(true);
+      expect(result.body).toEqual(Buffer.from(raw));
+      expect(result.contentType).toBe('application/pdf');
+      expect(transformToByteArray).toHaveBeenCalledTimes(1);
+      expect(mockS3Send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({ Key: 'cvs/tenant-1/msg-1.pdf', Bucket: 'test-bucket' }),
+        }),
+      );
+    });
+
+    it('falls back to application/octet-stream when R2 omits ContentType', async () => {
+      mockS3Send.mockResolvedValue({
+        Body: { transformToByteArray: jest.fn().mockResolvedValue(new Uint8Array([1])) },
+      });
+
+      const result = await service.getObject('cvs/tenant-1/no-type.bin');
+
+      expect(result.contentType).toBe('application/octet-stream');
+    });
+
+    it('propagates R2 errors to the caller (no swallow)', async () => {
+      mockS3Send.mockRejectedValue(new Error('R2 unavailable'));
+
+      await expect(service.getObject('cvs/tenant-1/msg-1.pdf')).rejects.toThrow('R2 unavailable');
+    });
+  });
 });

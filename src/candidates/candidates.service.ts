@@ -1038,4 +1038,51 @@ export class CandidatesService {
     const url = await this.storageService.getPresignedUrl(candidate.cvFileUrl);
     return { url };
   }
+
+  /**
+   * Stream the candidate's CV bytes same-origin so the browser can render them
+   * (e.g. docx-preview) without relying on R2 CORS. Tenant-scoped.
+   */
+  async getCvBytes(candidateId: string, tenantId: string): Promise<{ body: Buffer; contentType: string; filename: string }> {
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id: candidateId, tenantId },
+      select: { cvFileUrl: true, fullName: true },
+    });
+
+    if (!candidate) {
+      throw new NotFoundException({
+        error: { code: 'NOT_FOUND', message: 'Candidate not found' },
+      });
+    }
+
+    if (!candidate.cvFileUrl) {
+      throw new NotFoundException({
+        error: { code: 'NO_CV', message: 'No CV file found for this candidate' },
+      });
+    }
+
+    let body: Buffer;
+    let contentType: string;
+    try {
+      ({ body, contentType } = await this.storageService.getObject(candidate.cvFileUrl));
+    } catch (err) {
+      // Stale key (object deleted / never stored) → treat as "no CV" rather than a
+      // opaque 500. R2/S3 raises NoSuchKey on GetObject; NotFound on some backends.
+      const name = err instanceof Error ? err.name : '';
+      if (name === 'NoSuchKey' || name === 'NotFound') {
+        throw new NotFoundException({
+          error: { code: 'NO_CV', message: 'No CV file found for this candidate' },
+        });
+      }
+      throw err;
+    }
+    // Derive the extension from the key's basename only — keys look like
+    // `cvs/<tenant>/<id>.pdf`, so splitting the whole path on '.' could otherwise
+    // return the entire key (with slashes) when a basename has no extension.
+    const basename = candidate.cvFileUrl.split('/').pop() ?? '';
+    const ext = basename.includes('.') ? basename.split('.').pop()!.toLowerCase() || 'bin' : 'bin';
+    // Keep the filename ASCII-safe for the Content-Disposition header.
+    const safeName = (candidate.fullName || 'cv').replace(/[^\w.-]+/g, '_').slice(0, 80) || 'cv';
+    return { body, contentType, filename: `${safeName}.${ext}` };
+  }
 }

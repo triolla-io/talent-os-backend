@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, BadRequestException, CanActivate, ExecutionContext } from '@nestjs/common';
+import { INestApplication, BadRequestException, NotFoundException, CanActivate, ExecutionContext } from '@nestjs/common';
 import request from 'supertest';
 import { CandidatesController } from './candidates.controller';
 import { CandidatesService } from './candidates.service';
@@ -51,6 +51,7 @@ describe('CandidatesController (Integration Tests)', () => {
       updateCandidate: jest.fn(),
       findAll: jest.fn(),
       findOne: jest.fn(),
+      getCvBytes: jest.fn(),
     };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -72,6 +73,74 @@ describe('CandidatesController (Integration Tests)', () => {
   afterEach(async () => {
     await app.close();
     jest.clearAllMocks();
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // GET /candidates/:id/cv-file Tests (same-origin CV byte proxy)
+  // ─────────────────────────────────────────────────────────────────
+
+  describe('GET /candidates/:id/cv-file', () => {
+    it('streams the CV bytes with content-type, disposition, length, and cache headers', async () => {
+      const bytes = Buffer.from('%PDF-1.7 fake pdf bytes');
+      jest.spyOn(candidatesService, 'getCvBytes').mockResolvedValue({
+        body: bytes,
+        contentType: 'application/pdf',
+        filename: 'Jane_Doe.pdf',
+      });
+
+      const res = await request(app.getHttpServer()).get('/candidates/cand-uuid/cv-file').expect(200);
+
+      expect(res.headers['content-type']).toContain('application/pdf');
+      expect(res.headers['content-disposition']).toBe('inline; filename="Jane_Doe.pdf"');
+      expect(res.headers['content-length']).toBe(String(bytes.length));
+      expect(res.headers['cache-control']).toBe('private, max-age=300');
+      // Same-origin serve must not be MIME-sniffable or script-executable.
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['content-security-policy']).toContain('sandbox');
+      expect(Buffer.from(res.body)).toEqual(bytes);
+      // Route must be tenant-scoped via the session org.
+      expect(candidatesService.getCvBytes).toHaveBeenCalledWith('cand-uuid', TENANT_ID);
+    });
+
+    it('downgrades a non-allowlisted stored content-type to octet-stream (anti stored-XSS)', async () => {
+      // An object maliciously stored as text/html must never be echoed back as
+      // text/html on a same-origin serve — it would execute in our origin.
+      jest.spyOn(candidatesService, 'getCvBytes').mockResolvedValue({
+        body: Buffer.from('<script>alert(1)</script>'),
+        contentType: 'text/html',
+        filename: 'evil.html',
+      });
+
+      const res = await request(app.getHttpServer()).get('/candidates/cand-uuid/cv-file').expect(200);
+
+      expect(res.headers['content-type']).toContain('application/octet-stream');
+      expect(res.headers['content-type']).not.toContain('text/html');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('returns 404 with NOT_FOUND when the candidate does not exist', async () => {
+      jest.spyOn(candidatesService, 'getCvBytes').mockRejectedValue(
+        new NotFoundException({
+          error: { code: 'NOT_FOUND', message: 'Candidate not found' },
+        }),
+      );
+
+      const res = await request(app.getHttpServer()).get('/candidates/missing/cv-file').expect(404);
+
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 with NO_CV when the candidate has no CV file', async () => {
+      jest.spyOn(candidatesService, 'getCvBytes').mockRejectedValue(
+        new NotFoundException({
+          error: { code: 'NO_CV', message: 'No CV file found for this candidate' },
+        }),
+      );
+
+      const res = await request(app.getHttpServer()).get('/candidates/cand-uuid/cv-file').expect(404);
+
+      expect(res.body.error.code).toBe('NO_CV');
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────

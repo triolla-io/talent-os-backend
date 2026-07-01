@@ -220,6 +220,21 @@ Fetch a presigned S3 URL for a candidate's CV (valid for 1 hour).
 }
 ```
 
+### `GET /candidates/:id/cv-file`
+
+Stream the candidate's CV file bytes **same-origin** (proxied from R2). The client uses this to
+render Word (`.docx`) CVs in-browser (docx-preview) and PDF/DOCX thumbnails without a cross-origin
+(CORS) fetch of the R2 object. Tenant-scoped; requires an authenticated session.
+
+**Response:** `200 OK` — raw file bytes
+
+- `Content-Type`: the stored file's MIME type (e.g. `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`)
+- `Content-Disposition`: `inline; filename="<candidate>.<ext>"`
+
+**Errors:**
+
+- `404 Not Found` — candidate not found (`NOT_FOUND`) or no CV on file (`NO_CV`)
+
 ### `PATCH /candidates/:id`
 
 Update candidate profile fields and/or assign to a job pipeline.

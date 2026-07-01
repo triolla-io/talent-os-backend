@@ -11,12 +11,13 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { SessionGuard } from '../auth/session.guard';
 import { CandidatesService } from './candidates.service';
@@ -27,6 +28,15 @@ import { UpdateCandidateSchema } from './dto/update-candidate.dto';
 import { StageSummarySchema } from './dto/stage-summary.dto';
 import { RejectCandidateSchema } from './dto/reject-candidate.dto';
 import { CandidateResponse } from './dto/candidate-response.dto';
+
+// Content types we will echo back verbatim on the same-origin CV serve. Anything
+// else is forced to a non-executable octet-stream so a maliciously-stored
+// text/html or image/svg+xml object cannot run as stored XSS in our origin.
+const SERVABLE_CV_CONTENT_TYPES = new Set<string>([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
 
 @UseGuards(SessionGuard)
 @Controller('candidates')
@@ -73,6 +83,27 @@ export class CandidatesController {
   async getCvUrl(@Param('id') candidateId: string, @Req() req: Request) {
     const tenantId = req.session!.org;
     return this.candidatesService.getCvPresignedUrl(candidateId, tenantId);
+  }
+
+  /**
+   * Stream the CV bytes same-origin so the browser can render Word/PDF files
+   * in-page (docx-preview) without an R2 CORS dependency. Tenant-scoped via SessionGuard.
+   */
+  @Get(':id/cv-file')
+  async getCvFile(@Param('id') candidateId: string, @Req() req: Request, @Res() res: Response): Promise<void> {
+    const tenantId = req.session!.org;
+    const { body, contentType, filename } = await this.candidatesService.getCvBytes(candidateId, tenantId);
+    // Never trust the stored MIME type for a same-origin inline serve.
+    const safeContentType = SERVABLE_CV_CONTENT_TYPES.has(contentType) ? contentType : 'application/octet-stream';
+    res.setHeader('Content-Type', safeContentType);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('Content-Length', body.length);
+    // Defense in depth: stop MIME sniffing and forbid any script/embed execution
+    // even if a non-CV content type ever slips through.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.end(body);
   }
 
   /**

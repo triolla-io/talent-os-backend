@@ -1030,3 +1030,104 @@ describe('CandidatesService - Response Format Compliance', () => {
     expect(result.candidates[0].source_agency).toBe('LinkedIn');
   });
 });
+
+describe('CandidatesService.getCvBytes()', () => {
+  let service: CandidatesService;
+  let mockStorageService: { getObject: jest.Mock };
+  let mockPrisma: { candidate: { findFirst: jest.Mock } };
+
+  beforeEach(async () => {
+    mockStorageService = {
+      getObject: jest.fn().mockResolvedValue({ body: Buffer.from('PDF'), contentType: 'application/pdf' }),
+    };
+    mockPrisma = { candidate: { findFirst: jest.fn() } };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CandidatesService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: StorageService, useValue: mockStorageService },
+        { provide: ScoringAgentService, useValue: { score: jest.fn() } },
+        { provide: CandidateAiService, useValue: { generateSummary: jest.fn() } },
+        { provide: AttachmentExtractorService, useValue: { extract: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get<CandidatesService>(CandidatesService);
+  });
+
+  afterEach(() => jest.clearAllMocks());
+
+  it('returns the CV bytes, content type, and derived filename (tenant-scoped lookup)', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue({ cvFileUrl: 'cvs/tenant-1/msg-1.pdf', fullName: 'Jane Doe' });
+
+    const result = await service.getCvBytes('cand-1', TENANT_ID);
+
+    expect(result.body).toEqual(Buffer.from('PDF'));
+    expect(result.contentType).toBe('application/pdf');
+    expect(result.filename).toBe('Jane_Doe.pdf');
+    // Lookup must be scoped by BOTH id and tenantId (no cross-tenant CV reads).
+    expect(mockPrisma.candidate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'cand-1', tenantId: TENANT_ID } }),
+    );
+    expect(mockStorageService.getObject).toHaveBeenCalledWith('cvs/tenant-1/msg-1.pdf');
+  });
+
+  it('sanitizes non-ASCII/unsafe names into an ASCII-safe filename', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue({
+      cvFileUrl: 'cvs/tenant-1/msg-1.docx',
+      fullName: 'שרה כהן / "hacker"\r\nInjected',
+    });
+
+    const result = await service.getCvBytes('cand-1', TENANT_ID);
+
+    // No CR/LF, slashes, or quotes leak into the Content-Disposition value.
+    expect(result.filename).toMatch(/^[\w.-]+\.docx$/);
+    expect(result.filename).not.toMatch(/[\r\n"/]/);
+  });
+
+  it('falls back to a .bin extension when the object key has no extension', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue({ cvFileUrl: 'cvs/tenant-1/no-ext', fullName: 'Jane' });
+
+    const result = await service.getCvBytes('cand-1', TENANT_ID);
+
+    // Must not spill the whole slash-containing key into the filename.
+    expect(result.filename).toBe('Jane.bin');
+  });
+
+  it('throws 404 NOT_FOUND when the candidate does not exist', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue(null);
+
+    await expect(service.getCvBytes('missing', TENANT_ID)).rejects.toMatchObject({
+      response: { error: { code: 'NOT_FOUND' } },
+    });
+    expect(mockStorageService.getObject).not.toHaveBeenCalled();
+  });
+
+  it('throws 404 NO_CV when the candidate has no CV on file', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue({ cvFileUrl: null, fullName: 'Jane' });
+
+    await expect(service.getCvBytes('cand-1', TENANT_ID)).rejects.toMatchObject({
+      response: { error: { code: 'NO_CV' } },
+    });
+    expect(mockStorageService.getObject).not.toHaveBeenCalled();
+  });
+
+  it('maps a stale/deleted R2 key (NoSuchKey) to 404 NO_CV instead of a 500', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue({ cvFileUrl: 'cvs/tenant-1/gone.pdf', fullName: 'Jane' });
+    const noSuchKey = new Error('The specified key does not exist.');
+    noSuchKey.name = 'NoSuchKey';
+    mockStorageService.getObject.mockRejectedValue(noSuchKey);
+
+    await expect(service.getCvBytes('cand-1', TENANT_ID)).rejects.toMatchObject({
+      response: { error: { code: 'NO_CV' } },
+    });
+  });
+
+  it('propagates unexpected storage errors (not swallowed as NO_CV)', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue({ cvFileUrl: 'cvs/tenant-1/msg-1.pdf', fullName: 'Jane' });
+    mockStorageService.getObject.mockRejectedValue(new Error('R2 network timeout'));
+
+    await expect(service.getCvBytes('cand-1', TENANT_ID)).rejects.toThrow('R2 network timeout');
+  });
+});
