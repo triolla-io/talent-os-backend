@@ -18,6 +18,9 @@ import { CandidateResponse, computeCvReadable } from './dto/candidate-response.d
 import { Prisma } from '@prisma/client';
 import { CandidateAiService } from './candidate-ai.service';
 import { ScoringAgentService } from '../scoring/scoring.service';
+import { AttachmentExtractorService } from '../ingestion/services/attachment-extractor.service';
+import { sanitizePgText } from '../common/sanitize-pg-text';
+import type { EmailAttachmentDto } from '../webhooks';
 
 export type CandidateFilter = 'all' | 'duplicates';
 
@@ -30,6 +33,7 @@ export class CandidatesService {
     private readonly storageService: StorageService,
     private readonly candidateAiService: CandidateAiService,
     private readonly scoringAgent: ScoringAgentService,
+    private readonly attachmentExtractor: AttachmentExtractorService,
   ) {}
 
   async getCounts(tenantId: string): Promise<{ total: number; duplicates: number; unassigned: number }> {
@@ -592,6 +596,92 @@ export class CandidatesService {
         where: { id: candidateId },
         data: { isScoreOverridden: false, aiScore: null },
       });
+    }
+
+    return this.findOne(candidateId, tenantId);
+  }
+
+  /**
+   * TO-56: upload a CV, re-extract text, regenerate the AI summary, and (when a
+   * job is assigned and the score is not overridden) re-score the assigned job.
+   * Synchronous — mirrors the manual-create flow.
+   */
+  async uploadCv(candidateId: string, file: Express.Multer.File, tenantId: string): Promise<CandidateResponse> {
+    const MAX_BYTES = 10 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      throw new BadRequestException({ error: { code: 'FILE_TOO_LARGE', message: 'CV file must not exceed 10 MB' } });
+    }
+
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id: candidateId, tenantId },
+      select: {
+        id: true,
+        fullName: true,
+        jobId: true,
+        currentRole: true,
+        yearsExperience: true,
+        skills: true,
+        isScoreOverridden: true,
+      },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ error: { code: 'NOT_FOUND', message: 'Candidate not found' } });
+    }
+
+    // 1. Upload to R2 (validates MIME type; throws BadRequest on unsupported type).
+    let cvFileUrl: string;
+    try {
+      cvFileUrl = await this.storageService.uploadFromBuffer(file.buffer, file.mimetype, tenantId, candidateId);
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      throw new InternalServerErrorException({ error: { code: 'UPLOAD_FAILED', message: 'Failed to upload CV file' } });
+    }
+
+    // 2. Extract text (extractor already sanitizes; sanitize again defensively).
+    const attachments: EmailAttachmentDto[] = [
+      {
+        Name: file.originalname,
+        Content: file.buffer.toString('base64'),
+        ContentType: file.mimetype,
+        ContentLength: file.size,
+      },
+    ];
+    const cvText = sanitizePgText(await this.attachmentExtractor.extract(attachments));
+
+    // 3. Regenerate the AI summary.
+    let jobTitle: string | null = null;
+    if (candidate.jobId) {
+      const job = await this.prisma.job.findFirst({ where: { id: candidate.jobId, tenantId }, select: { title: true } });
+      jobTitle = job?.title ?? null;
+    }
+    const aiSummary = await this.candidateAiService.generateSummary({
+      fullName: candidate.fullName,
+      currentRole: candidate.currentRole,
+      yearsExperience: candidate.yearsExperience,
+      skills: candidate.skills,
+      cvText,
+      jobTitle,
+    });
+
+    // 4. Persist the new CV text + summary + file url.
+    await this.prisma.candidate.update({
+      where: { id: candidateId },
+      data: { cvFileUrl, cvText, aiSummary },
+    });
+
+    // 5. Re-score only when a job is assigned, CV text exists, and no sticky override.
+    if (candidate.jobId && cvText.trim() !== '' && !candidate.isScoreOverridden) {
+      await this.rescoreAssignedJob(
+        {
+          id: candidate.id,
+          jobId: candidate.jobId,
+          cvText,
+          currentRole: candidate.currentRole,
+          yearsExperience: candidate.yearsExperience,
+          skills: candidate.skills,
+        },
+        tenantId,
+      );
     }
 
     return this.findOne(candidateId, tenantId);

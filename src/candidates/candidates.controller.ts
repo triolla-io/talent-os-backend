@@ -189,6 +189,25 @@ export class CandidatesController {
   }
 
   /**
+   * TO-56: upload a replacement CV. Re-extracts text, regenerates the AI summary,
+   * and re-scores the assigned job (unless the score is manually overridden).
+   * @returns Updated CandidateResponse
+   */
+  @Post(':id/cv')
+  @UseInterceptors(FileInterceptor('cv_file'))
+  async uploadCv(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req() req: Request,
+  ): Promise<CandidateResponse> {
+    if (!file) {
+      throw new BadRequestException({ error: { code: 'VALIDATION_ERROR', message: 'cv_file is required' } });
+    }
+    const tenantId = req.session!.org;
+    return this.candidatesService.uploadCv(id, file, tenantId);
+  }
+
+  /**
    * Save or update a free-text summary for a specific hiring stage the candidate has gone through.
    * Upserts the CandidateStageSummary record for the (candidateId, stageId) pair.
    * The stage must belong to the candidate's currently assigned job.

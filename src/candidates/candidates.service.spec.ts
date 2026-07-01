@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { ScoringAgentService } from '../scoring/scoring.service';
 import { CandidateAiService } from './candidate-ai.service';
+import { AttachmentExtractorService } from '../ingestion/services/attachment-extractor.service';
 
 const TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -76,9 +77,10 @@ describe('CandidatesService', () => {
       providers: [
         CandidatesService,
         { provide: PrismaService, useValue: prismaMock },
-        { provide: StorageService, useValue: { uploadFromBuffer: jest.fn() } },
+        { provide: StorageService, useValue: { uploadFromBuffer: jest.fn().mockResolvedValue('cvs/t/cand-1.pdf') } },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 75, reasoning: 'Test', strengths: [], gaps: [], modelUsed: 'test' }) } },
-        { provide: CandidateAiService, useValue: { generateSummary: jest.fn().mockResolvedValue('Test summary') } },
+        { provide: CandidateAiService, useValue: { generateSummary: jest.fn().mockResolvedValue('New summary') } },
+        { provide: AttachmentExtractorService, useValue: { extract: jest.fn().mockResolvedValue('Extracted CV text') } },
       ],
     }).compile();
 
@@ -200,6 +202,77 @@ describe('CandidatesService', () => {
       expect(prismaMock.candidate.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ aiScore: 75 }) }),
       );
+    });
+  });
+
+  describe('uploadCv', () => {
+    const file = {
+      originalname: 'cv.pdf',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from('pdf-bytes'),
+      size: 1234,
+    } as Express.Multer.File;
+
+    it('uploads, writes cv_text + summary, and re-scores when a job is assigned and not overridden', async () => {
+      prismaMock.candidate.findFirst = jest.fn().mockResolvedValue(
+        mockCandidate({
+          id: 'cand-1',
+          jobId: 'job-1',
+          isScoreOverridden: false,
+          currentRole: 'Dev',
+          yearsExperience: 3,
+          skills: ['ts'],
+        }),
+      );
+      const update = jest.fn().mockResolvedValue({});
+      prismaMock.candidate.update = update;
+      prismaMock.job = {
+        findFirst: jest.fn().mockResolvedValue({ id: 'job-1', title: 'Dev', description: 'd', mustHaveSkills: [] }),
+      };
+      prismaMock.application = { findFirst: jest.fn().mockResolvedValue({ id: 'app-1' }) };
+      prismaMock.candidateJobScore = { upsert: jest.fn().mockResolvedValue({}) };
+      prismaMock.candidate.findMany = jest
+        .fn()
+        .mockResolvedValue([mockCandidate({ cvText: 'Extracted CV text', aiScore: 75 })]);
+
+      await service.uploadCv('cand-1', file, TENANT_ID);
+
+      // cv_text + ai_summary written
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'cand-1' },
+          data: expect.objectContaining({ cvText: 'Extracted CV text', aiSummary: 'New summary' }),
+        }),
+      );
+      // re-scored (via rescoreAssignedJob → candidateJobScore.upsert)
+      expect(prismaMock.candidateJobScore.upsert).toHaveBeenCalled();
+    });
+
+    it('skips scoring when the candidate has no job', async () => {
+      prismaMock.candidate.findFirst = jest
+        .fn()
+        .mockResolvedValue(mockCandidate({ id: 'cand-1', jobId: null, isScoreOverridden: false }));
+      prismaMock.candidate.update = jest.fn().mockResolvedValue({});
+      prismaMock.candidateJobScore = { upsert: jest.fn() };
+      prismaMock.candidate.findMany = jest.fn().mockResolvedValue([mockCandidate({ cvText: 'Extracted CV text' })]);
+
+      await service.uploadCv('cand-1', file, TENANT_ID);
+
+      expect(prismaMock.candidateJobScore.upsert).not.toHaveBeenCalled();
+    });
+
+    it('skips the score write when the candidate is overridden', async () => {
+      prismaMock.candidate.findFirst = jest
+        .fn()
+        .mockResolvedValue(mockCandidate({ id: 'cand-1', jobId: 'job-1', isScoreOverridden: true }));
+      prismaMock.candidate.update = jest.fn().mockResolvedValue({});
+      prismaMock.job = { findFirst: jest.fn().mockResolvedValue({ title: 'Dev' }) };
+      prismaMock.candidateJobScore = { upsert: jest.fn() };
+      prismaMock.candidate.findMany = jest.fn().mockResolvedValue([mockCandidate({ isScoreOverridden: true })]);
+
+      await service.uploadCv('cand-1', file, TENANT_ID);
+
+      expect(prismaMock.candidateJobScore.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -398,6 +471,7 @@ describe('CandidatesService.createCandidate()', () => {
         { provide: StorageService, useValue: mockStorageService },
         { provide: ScoringAgentService, useValue: { score: jest.fn().mockResolvedValue({ score: 75, reasoning: 'Test', strengths: [], gaps: [], modelUsed: 'test' }) } },
         { provide: CandidateAiService, useValue: { generateSummary: jest.fn().mockResolvedValue('Test summary') } },
+        { provide: AttachmentExtractorService, useValue: { extract: jest.fn().mockResolvedValue('Extracted CV text') } },
       ],
     }).compile();
 
@@ -557,6 +631,7 @@ describe('CandidatesService.deleteCandidate()', () => {
         { provide: StorageService, useValue: { uploadFromBuffer: jest.fn() } },
         { provide: ScoringAgentService, useValue: { score: jest.fn() } },
         { provide: CandidateAiService, useValue: { generateSummary: jest.fn() } },
+        { provide: AttachmentExtractorService, useValue: { extract: jest.fn() } },
       ],
     }).compile();
 
@@ -652,6 +727,7 @@ describe('CandidatesService.updateCandidate() - Error Handling', () => {
         { provide: StorageService, useValue: {} },
         { provide: ScoringAgentService, useValue: { score: jest.fn() } },
         { provide: CandidateAiService, useValue: { generateSummary: jest.fn() } },
+        { provide: AttachmentExtractorService, useValue: { extract: jest.fn() } },
       ],
     }).compile();
 
@@ -760,6 +836,7 @@ describe('CandidatesService.findAll() - Unassigned Filter', () => {
         { provide: StorageService, useValue: {} },
         { provide: ScoringAgentService, useValue: {} },
         { provide: CandidateAiService, useValue: {} },
+        { provide: AttachmentExtractorService, useValue: {} },
       ],
     }).compile();
 
@@ -881,6 +958,7 @@ describe('CandidatesService - Response Format Compliance', () => {
         { provide: StorageService, useValue: {} },
         { provide: ScoringAgentService, useValue: {} },
         { provide: CandidateAiService, useValue: {} },
+        { provide: AttachmentExtractorService, useValue: {} },
       ],
     }).compile();
 

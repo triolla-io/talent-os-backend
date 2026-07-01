@@ -6,10 +6,13 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { AuthModule } from '../auth/auth.module';
+import { AttachmentExtractorService } from '../ingestion/services/attachment-extractor.service';
 
 @Module({
   imports: [PrismaModule, StorageModule, ScoringModule, AuthModule],
   controllers: [CandidatesController],
-  providers: [CandidatesService, CandidateAiService],
+  // AttachmentExtractorService has no injected deps, so provide it directly rather than
+  // importing IngestionModule (which registers a Bull queue).
+  providers: [CandidatesService, CandidateAiService, AttachmentExtractorService],
 })
 export class CandidatesModule {}
