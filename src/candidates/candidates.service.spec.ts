@@ -240,6 +240,35 @@ describe('CandidatesService', () => {
     });
   });
 
+  describe('rescoreCandidate', () => {
+    it('rescores the assigned job and returns the score result', async () => {
+      prismaMock.candidate.findFirst = jest.fn().mockResolvedValue(
+        mockCandidate({ id: 'c1', jobId: 'j1', cvText: 'Real CV', currentRole: 'Dev', yearsExperience: 5, skills: ['ts'] }),
+      );
+      prismaMock.job = {
+        findFirst: jest.fn().mockResolvedValue({ id: 'j1', title: 'Eng', description: 'd', mustHaveSkills: ['ts'] }),
+      };
+      prismaMock.application = { findFirst: jest.fn().mockResolvedValue({ id: 'app1' }) };
+      prismaMock.candidateJobScore = { upsert: jest.fn().mockResolvedValue({}) };
+      prismaMock.candidate.update = jest.fn().mockResolvedValue({});
+
+      const result = await service.rescoreCandidate('c1', TENANT_ID);
+
+      expect(result).toEqual({ score: 75, reasoning: 'Test', strengths: [], gaps: [], modelUsed: 'test' });
+      expect(prismaMock.candidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { aiScore: 75 } }),
+      );
+    });
+
+    it('returns null when the candidate has no assigned job', async () => {
+      prismaMock.candidate.findFirst = jest
+        .fn()
+        .mockResolvedValue(mockCandidate({ id: 'c1', jobId: null, cvText: 'Real CV' }));
+      const result = await service.rescoreCandidate('c1', TENANT_ID);
+      expect(result).toBeNull();
+    });
+  });
+
   describe('uploadCv', () => {
     const file = {
       originalname: 'cv.pdf',

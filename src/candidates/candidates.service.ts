@@ -516,14 +516,14 @@ export class CandidatesService {
       skills: string[];
     },
     tenantId: string,
-  ): Promise<void> {
+  ): Promise<{ score: number; reasoning: string; strengths: string[]; gaps: string[]; modelUsed: string } | null> {
     const job = await this.prisma.job.findFirst({
       where: { id: candidate.jobId, tenantId },
       select: { id: true, title: true, description: true, mustHaveSkills: true },
     });
     if (!job) {
       await this.prisma.candidate.update({ where: { id: candidate.id }, data: { aiScore: null } });
-      return;
+      return null;
     }
 
     const scoreResult = await this.scoringAgent.score({
@@ -571,6 +571,30 @@ export class CandidatesService {
       where: { id: candidate.id },
       data: { aiScore: scoreResult.score },
     });
+
+    return scoreResult;
+  }
+
+  /**
+   * MCP: re-score a candidate against its currently-assigned job, inline, and
+   * return the fresh score. Reuses the reassignment scoring path. Returns null
+   * when there is no assigned job or the CV text is blank.
+   */
+  async rescoreCandidate(
+    candidateId: string,
+    tenantId: string,
+  ): Promise<{ score: number; reasoning: string; strengths: string[]; gaps: string[]; modelUsed: string } | null> {
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id: candidateId, tenantId },
+      select: { id: true, jobId: true, cvText: true, currentRole: true, yearsExperience: true, skills: true },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ error: { code: 'NOT_FOUND', message: 'Candidate not found' } });
+    }
+    if (!candidate.jobId || !candidate.cvText || candidate.cvText.trim() === '') {
+      return null;
+    }
+    return this.rescoreAssignedJob({ ...candidate, jobId: candidate.jobId }, tenantId);
   }
 
   /**
