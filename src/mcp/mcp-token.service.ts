@@ -8,6 +8,8 @@ export interface McpClaims {
   role: 'owner' | 'admin' | 'member' | 'viewer';
   scope: 'mcp';
   aud: string;
+  exp?: number; // seconds since epoch (set by setExpirationTime; needed by requireBearerAuth)
+  iat?: number;
 }
 
 @Injectable()

@@ -109,6 +109,8 @@ export class McpOAuthProvider implements OAuthServerProvider {
       token,
       clientId: claims.sub,
       scopes: ['mcp'],
+      // requireBearerAuth rejects tokens without a numeric expiresAt (seconds since epoch).
+      expiresAt: claims.exp,
       extra: { userId: claims.sub, org: claims.org, role: claims.role },
     };
   }
