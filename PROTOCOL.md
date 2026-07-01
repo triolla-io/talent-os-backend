@@ -65,6 +65,8 @@ Fetch candidates with optional search and filtering.
       "source_agency": null,
       "created_at": "ISO8601",
       "ai_score": 85,
+      "cv_readable": true,
+      "is_score_overridden": false,
       "is_duplicate": false,
       "skills": ["React", "TypeScript"],
       "status": "active",
@@ -95,6 +97,11 @@ Do not treat `is_duplicate: true` as a guarantee that two candidate rows represe
 
 For email-ingested CVs, if a candidate name cannot be detected, `full_name` will be `"Unknown Candidate"` (never an empty string).
 
+**Notes on `cv_readable` and `is_score_overridden`:**
+
+- `cv_readable` — derived boolean: `true` when the candidate has non-empty extracted CV text, else `false`. The raw `cv_text` is never returned by the API.
+- `is_score_overridden` — `true` when a recruiter has manually set `ai_score`. Auto-scoring (intake + reassignment) will not overwrite the denormalized score while this is `true`.
+
 ### `GET /candidates/:id`
 
 Fetch a single candidate by ID.
@@ -118,6 +125,8 @@ Fetch a single candidate by ID.
   "source_agency": null,
   "created_at": "2026-03-29T14:24:39.233Z",
   "ai_score": null,
+  "cv_readable": true,
+  "is_score_overridden": false,
   "is_duplicate": false,
   "skills": [
     "c#",
@@ -225,7 +234,8 @@ Update candidate profile fields and/or assign to a job pipeline.
   "phone": "+1 555-0101",
   "current_role": "Product Manager",
   "location": "San Francisco",
-  "years_experience": 7
+  "years_experience": 7,
+  "ai_score": 82
 }
 ```
 
@@ -234,6 +244,7 @@ Update candidate profile fields and/or assign to a job pipeline.
 - If `job_id` is provided and candidate has no job: atomically creates Application and sets `hiringStageId` to first enabled stage.
 - If `job_id` matches existing assignment: no-op for that field.
 - If `job_id` differs from existing assignment: throws 400 ALREADY_ASSIGNED.
+- If `ai_score` is provided (integer `0–100`): sets the denormalized score and marks `is_score_overridden = true`. Out-of-range or non-integer values return `400 VALIDATION_ERROR`. The override is sticky until reverted.
 - All other fields are optional and updated independently.
 
 **Response:** `200 OK` (returns full CandidateResponse)
@@ -243,6 +254,46 @@ Update candidate profile fields and/or assign to a job pipeline.
 - `400 Bad Request` — validation failed or ALREADY_ASSIGNED
 - `400 No Stages` — job has no enabled hiring stages
 - `404 Not Found` — candidate not found
+
+### `POST /candidates/:id/cv`
+
+Upload a replacement CV. Re-extracts text, regenerates the AI summary, and re-scores the assigned job.
+
+**Content-Type:** `multipart/form-data`
+
+**Form Fields:**
+
+- `cv_file` (required): CV file (binary upload). PDF / DOC / DOCX, ≤ 10 MB.
+
+**Behavior:**
+
+- Stores the file in R2 and updates `cv_file_url`.
+- Extracts text into `cv_text` (this flips `cv_readable` to `true`).
+- Regenerates `ai_summary`.
+- If the candidate has an assigned job and `is_score_overridden` is `false`: re-scores that job and updates `ai_score`. If no job is assigned, the summary is regenerated but no score is written. If overridden, `ai_score` is left untouched.
+
+**Response:** `200 OK` (returns the full candidate object).
+
+**Errors:**
+
+- `400 Bad Request` — missing `cv_file`, file over 10 MB, or invalid file type.
+- `404 Not Found` — candidate not found.
+
+### `POST /candidates/:id/score/revert`
+
+Clear a manual score override and return to an AI score.
+
+**Behavior:**
+
+- Sets `is_score_overridden = false`.
+- If the candidate has an assigned job and CV text: re-scores immediately and updates `ai_score`.
+- If no job is assigned or no CV text exists: sets `ai_score = null`.
+
+**Response:** `200 OK` (returns the full candidate object).
+
+**Errors:**
+
+- `404 Not Found` — candidate not found.
 
 ### `POST /candidates/:id/reject`
 
