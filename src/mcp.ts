@@ -24,7 +24,16 @@ async function bootstrap() {
   // Security headers (HSTS, X-Frame-Options anti-clickjacking on the Google login page, noSniff,
   // etc.). CSP is disabled because the self-contained login page uses inline <script>/<style> and
   // loads Google Identity Services from accounts.google.com; the other helmet defaults still apply.
-  expressApp.use(helmet({ contentSecurityPolicy: false }));
+  expressApp.use(
+    helmet({
+      contentSecurityPolicy: false,
+      // Google Identity Services opens a sign-in popup that posts the token back to this
+      // (opener) window. helmet's default COOP `same-origin` severs window.opener, so the
+      // popup closes with `popup_closed` before delivering the token. `same-origin-allow-popups`
+      // keeps COOP protection for everything else while allowing the GIS popup to communicate back.
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    }),
+  );
   // Explicit body-size cap to blunt large-payload DoS on the JSON-RPC endpoint.
   expressApp.use(express.json({ limit: '1mb' }));
 
