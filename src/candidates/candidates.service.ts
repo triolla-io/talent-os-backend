@@ -14,7 +14,7 @@ import { UpdateCandidateStageDto } from './dto/update-candidate-stage.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { StageSummaryDto } from './dto/stage-summary.dto';
 import { RejectCandidateDto } from './dto/reject-candidate.dto';
-import { CandidateResponse } from './dto/candidate-response.dto';
+import { CandidateResponse, computeCvReadable } from './dto/candidate-response.dto';
 import { Prisma } from '@prisma/client';
 import { CandidateAiService } from './candidate-ai.service';
 import { ScoringAgentService } from '../scoring/scoring.service';
@@ -113,6 +113,8 @@ export class CandidatesService {
         yearsExperience: true,
         aiSummary: true,
         aiScore: true,
+        cvText: true,
+        isScoreOverridden: true,
         createdAt: true,
         skills: true,
         jobId: true,
@@ -155,6 +157,8 @@ export class CandidatesService {
         source_agency: c.sourceAgency,
         created_at: c.createdAt,
         ai_score: aiScore,
+        cv_readable: computeCvReadable(c.cvText),
+        is_score_overridden: c.isScoreOverridden,
         is_duplicate: c.duplicateFlags.length > 0,
         skills: c.skills,
 
@@ -202,6 +206,8 @@ export class CandidatesService {
         yearsExperience: true,
         aiSummary: true,
         aiScore: true,
+        cvText: true,
+        isScoreOverridden: true,
         hiringStage: {
           select: { name: true },
         },
@@ -246,6 +252,8 @@ export class CandidatesService {
       source_agency: c.sourceAgency,
       created_at: c.createdAt,
       ai_score: c.aiScore,
+      cv_readable: computeCvReadable(c.cvText),
+      is_score_overridden: c.isScoreOverridden,
       ai_summary: c.aiSummary,
       is_duplicate: c.duplicateFlags.length > 0,
       years_experience: c.yearsExperience,
@@ -796,6 +804,8 @@ export class CandidatesService {
       source: candidate.source,
       source_agency: candidate.sourceAgency,
       ai_summary: candidate.aiSummary,
+      cv_readable: computeCvReadable(candidate.cvText),
+      is_score_overridden: candidate.isScoreOverridden,
       created_at: candidate.createdAt,
       updated_at: candidate.updatedAt,
       application_id: application.id,

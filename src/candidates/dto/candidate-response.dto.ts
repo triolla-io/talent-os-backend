@@ -14,6 +14,8 @@ export interface CandidateResponse {
   source_agency: string | null;
   created_at: Date;
   ai_score: number | null;
+  cv_readable: boolean;
+  is_score_overridden: boolean;
   ai_summary: string | null;
   is_duplicate: boolean;
   skills: string[];
@@ -33,4 +35,12 @@ export interface CandidateResponse {
   rejection_note: string | null;
   stage_summaries: Record<string, string>;
   years_experience: number | null;
+}
+
+/**
+ * Derived CV read-status (TO-55). True only when extracted CV text exists and is
+ * not blank. `cv_text` itself is never serialized — this boolean is shipped instead.
+ */
+export function computeCvReadable(cvText: string | null): boolean {
+  return cvText != null && cvText.trim() !== '';
 }

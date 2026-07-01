@@ -30,6 +30,8 @@ function mockCandidate(overrides: Partial<{
   candidateStageSummaries: { jobStageId: string; summary: string }[];
   status: string;
   aiSummary: string | null;
+  cvText: string | null;
+  isScoreOverridden: boolean;
 }> = {}) {
   return {
     id: 'cand-1',
@@ -52,6 +54,8 @@ function mockCandidate(overrides: Partial<{
     candidateStageSummaries: [],
     status: 'active',
     aiSummary: null,
+    cvText: null,
+    isScoreOverridden: false,
     ...overrides,
   };
 }
@@ -82,6 +86,26 @@ describe('CandidatesService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe('cv_readable derivation', () => {
+    it('is true when cv_text is non-empty and false for null/whitespace', async () => {
+      prismaMock.candidate.findMany.mockResolvedValue([
+        mockCandidate({ id: 'c1', cvText: 'Real CV content', isScoreOverridden: false }),
+        mockCandidate({ id: 'c2', cvText: '   ', isScoreOverridden: true }),
+        mockCandidate({ id: 'c3', cvText: null, isScoreOverridden: false }),
+      ]);
+
+      const result = await service.findAll(TENANT_ID);
+
+      expect(result.candidates[0].cv_readable).toBe(true);
+      expect(result.candidates[0].is_score_overridden).toBe(false);
+      expect(result.candidates[1].cv_readable).toBe(false);
+      expect(result.candidates[1].is_score_overridden).toBe(true);
+      expect(result.candidates[2].cv_readable).toBe(false);
+      // cv_text must never leak into the response
+      expect((result.candidates[0] as Record<string, unknown>).cv_text).toBeUndefined();
+    });
   });
 
   // Test 1: no params → returns all candidates with ai_score from denormalized field
