@@ -77,7 +77,9 @@ Fetch candidates with optional search and filtering.
       "hiring_stage_name": "Screening",
       "job_title": "Senior Frontend Developer",
       "ai_summary": "Experienced engineer with strong React skills. Recommended for senior roles.",
-      "years_experience": 5
+      "years_experience": 5,
+      "salary_expectation_min": 10000,
+      "salary_expectation_max": 15000
     }
   ],
   "total": 1
@@ -152,7 +154,9 @@ Fetch a single candidate by ID.
   "hiring_stage_name": "Screening",
   "job_title": "Senior Frontend Developer",
   "ai_summary": "Experienced engineer with strong React skills. Recommended for senior roles.",
-  "years_experience": 5
+  "years_experience": 5,
+  "salary_expectation_min": 10000,
+  "salary_expectation_max": 15000
 }
 ```
 
@@ -181,6 +185,8 @@ Create a new candidate profile, optionally with a CV file upload.
   "current_role": "Software Engineer",
   "location": "Tel Aviv",
   "years_experience": 5,
+  "salary_expectation_min": 10000,
+  "salary_expectation_max": 15000,
   "skills": ["React", "TypeScript"],
   "ai_summary": null,
   "cv_file_url": null,
@@ -250,6 +256,8 @@ Update candidate profile fields and/or assign to a job pipeline.
   "current_role": "Product Manager",
   "location": "San Francisco",
   "years_experience": 7,
+  "salary_expectation_min": 10000,
+  "salary_expectation_max": 15000,
   "ai_score": 82
 }
 ```
