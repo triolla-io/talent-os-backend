@@ -141,6 +141,8 @@ model Candidate {
   currentRole     String?  @map("current_role") @db.Text
   location        String?  @db.Text
   yearsExperience Int?     @map("years_experience") @db.SmallInt
+  salaryExpectationMin Int? @map("salary_expectation_min")
+  salaryExpectationMax Int? @map("salary_expectation_max")
   skills          String[] @default([])
   cvText          String?  @map("cv_text") @db.Text
   cvFileUrl       String?  @map("cv_file_url") @db.Text
