@@ -27,6 +27,8 @@ export const CreateCandidateSchema = z.object({
   current_role: z.string().nullable().optional(),
   location: z.string().nullable().optional(),
   years_experience: z.coerce.number().int().min(0).max(50).nullable().optional(),
+  salary_expectation_min: z.coerce.number().int().min(0).nullable().optional(),
+  salary_expectation_max: z.coerce.number().int().min(0).nullable().optional(),
   skills: z.preprocess((val) => {
     if (val === undefined || val === null || val === '') return [];
 
@@ -45,6 +47,17 @@ export const CreateCandidateSchema = z.object({
   }, z.array(z.string())),
   ai_summary: z.string().nullable().optional(),
   source_agency: z.string().nullable().optional(),
-});
+}).refine(
+  (val) =>
+    !(
+      val.salary_expectation_min != null &&
+      val.salary_expectation_max != null &&
+      val.salary_expectation_min > val.salary_expectation_max
+    ),
+  {
+    message: 'Minimum salary must be less than or equal to maximum salary',
+    path: ['salary_expectation_max'],
+  },
+);
 
 export type CreateCandidateDto = z.infer<typeof CreateCandidateSchema>;
