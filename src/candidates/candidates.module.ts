@@ -14,5 +14,6 @@ import { AttachmentExtractorService } from '../ingestion/services/attachment-ext
   // AttachmentExtractorService has no injected deps, so provide it directly rather than
   // importing IngestionModule (which registers a Bull queue).
   providers: [CandidatesService, CandidateAiService, AttachmentExtractorService],
+  exports: [CandidatesService, CandidateAiService],
 })
 export class CandidatesModule {}
