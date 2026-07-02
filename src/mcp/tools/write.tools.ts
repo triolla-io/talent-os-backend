@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ctxFromExtra, assertWrite, toolJson, toolError, type McpServices } from '../mcp-server.factory';
+import { ctxFromExtra, assertWrite, toolJson, toolError, errorMessage, type McpServices } from '../mcp-server.factory';
 
 export function registerWriteTools(server: McpServer, s: McpServices): void {
   server.registerTool(
@@ -21,7 +21,7 @@ export function registerWriteTools(server: McpServer, s: McpServices): void {
         await s.candidates.updateStage(args.candidate_id, { hiring_stage_id: args.hiring_stage_id }, org);
         return toolJson({ ok: true, candidate_id: args.candidate_id, hiring_stage_id: args.hiring_stage_id });
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to move candidate.');
+        return toolError(errorMessage(e, 'Failed to move candidate.'));
       }
     },
   );
@@ -49,7 +49,7 @@ export function registerWriteTools(server: McpServer, s: McpServices): void {
         );
         return toolJson(res);
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to reject candidate.');
+        return toolError(errorMessage(e, 'Failed to reject candidate.'));
       }
     },
   );
@@ -79,7 +79,7 @@ export function registerWriteTools(server: McpServer, s: McpServices): void {
         const { candidate_id, ...patch } = args;
         return toolJson(await s.candidates.updateCandidate(candidate_id, patch as never, org));
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to update candidate.');
+        return toolError(errorMessage(e, 'Failed to update candidate.'));
       }
     },
   );
@@ -102,7 +102,7 @@ export function registerWriteTools(server: McpServer, s: McpServices): void {
         assertWrite(role);
         return toolJson(await s.candidates.saveStageSummary(args.candidate_id, args.stage_id, args.summary, org));
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to save stage summary.');
+        return toolError(errorMessage(e, 'Failed to save stage summary.'));
       }
     },
   );
@@ -129,7 +129,7 @@ export function registerWriteTools(server: McpServer, s: McpServices): void {
         assertWrite(role);
         return toolJson(await s.jobs.createJob(args as never, org));
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to create job.');
+        return toolError(errorMessage(e, 'Failed to create job.'));
       }
     },
   );
@@ -158,7 +158,7 @@ export function registerWriteTools(server: McpServer, s: McpServices): void {
         const { job_id, ...patch } = args;
         return toolJson(await s.jobs.updateJob(job_id, patch as never, org));
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to update job.');
+        return toolError(errorMessage(e, 'Failed to update job.'));
       }
     },
   );

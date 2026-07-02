@@ -15,13 +15,29 @@ describe('McpTokenService', () => {
 
   it('signs and verifies an access token with scope + aud', async () => {
     const t = await svc.signAccess({ sub: 'u1', org: 'o1', role: 'admin' });
-    const claims = await svc.verify(t);
+    const claims = await svc.verifyAccess(t);
     expect(claims).toMatchObject({ sub: 'u1', org: 'o1', role: 'admin', scope: 'mcp', aud: AUD });
   });
 
   it('rejects a token signed with a different secret (isolation)', async () => {
     const foreign = await new McpTokenService(cfg(OTHER)).signAccess({ sub: 'u1', org: 'o1', role: 'admin' });
-    await expect(svc.verify(foreign)).rejects.toThrow();
+    await expect(svc.verifyAccess(foreign)).rejects.toThrow();
+  });
+
+  it('rejects a refresh token presented as an access token (typ separation)', async () => {
+    const refresh = await svc.signRefresh({ sub: 'u1', org: 'o1', role: 'admin' });
+    await expect(svc.verifyAccess(refresh)).rejects.toThrow();
+  });
+
+  it('rejects an access token presented as a refresh token', async () => {
+    const access = await svc.signAccess({ sub: 'u1', org: 'o1', role: 'admin' });
+    await expect(svc.verifyRefresh(access)).rejects.toThrow();
+  });
+
+  it('verifyRefresh accepts a real refresh token', async () => {
+    const refresh = await svc.signRefresh({ sub: 'u1', org: 'o1', role: 'member' });
+    const claims = await svc.verifyRefresh(refresh);
+    expect(claims).toMatchObject({ sub: 'u1', org: 'o1', role: 'member', typ: 'refresh' });
   });
 
   it('the SPA JwtService cannot verify an MCP token (cross-guard isolation)', async () => {
@@ -30,7 +46,7 @@ describe('McpTokenService', () => {
     const mcpToken = await svc.signAccess({ sub: 'u1', org: 'o1', role: 'admin' });
     // With distinct secrets in production, JwtService.verify would reject. Here we assert the token
     // carries scope:'mcp' + aud so a scope-checking guard could also reject it.
-    const claims = await svc.verify(mcpToken);
+    const claims = await svc.verifyAccess(mcpToken);
     expect(claims.scope).toBe('mcp');
     expect(claims.aud).toBe(AUD);
   });

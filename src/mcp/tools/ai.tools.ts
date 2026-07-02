@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ctxFromExtra, assertWrite, toolJson, toolError, type McpServices } from '../mcp-server.factory';
+import { ctxFromExtra, assertWrite, toolJson, toolError, errorMessage, type McpServices } from '../mcp-server.factory';
 
 export function registerAiTools(server: McpServer, s: McpServices): void {
   server.registerTool(
@@ -22,7 +22,7 @@ export function registerAiTools(server: McpServer, s: McpServices): void {
         }
         return toolJson({ rescored: true, ...result });
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to rescore candidate.');
+        return toolError(errorMessage(e, 'Failed to rescore candidate.'));
       }
     },
   );
@@ -51,7 +51,7 @@ export function registerAiTools(server: McpServer, s: McpServices): void {
         if (!summary) return toolError('Summary generation is unavailable (missing API key or generation failed).');
         return toolJson({ candidate_id: args.candidate_id, summary });
       } catch (e) {
-        return toolError(e instanceof Error ? e.message : 'Failed to summarize candidate.');
+        return toolError(errorMessage(e, 'Failed to summarize candidate.'));
       }
     },
   );

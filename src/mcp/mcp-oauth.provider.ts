@@ -4,7 +4,11 @@ import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
 import type { OAuthServerProvider, AuthorizationParams } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
-import type { OAuthClientInformationFull, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type {
+  OAuthClientInformationFull,
+  OAuthTokenRevocationRequest,
+  OAuthTokens,
+} from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { McpOAuthStore } from './mcp-oauth.store';
 import { McpTokenService } from './mcp-token.service';
@@ -98,13 +102,25 @@ export class McpOAuthProvider implements OAuthServerProvider {
 
   async exchangeRefreshToken(_client: OAuthClientInformationFull, refreshToken: string): Promise<OAuthTokens> {
     if (!(await this.store.isRefreshTokenValid(refreshToken))) throw new Error('Invalid refresh token');
-    const claims = await this.tokens.verify(refreshToken);
-    const access_token = await this.tokens.signAccess({ sub: claims.sub, org: claims.org, role: claims.role });
-    return { access_token, token_type: 'bearer', expires_in: 900, scope: 'mcp' };
+    const claims = await this.tokens.verifyRefresh(refreshToken);
+    const user = { sub: claims.sub, org: claims.org, role: claims.role };
+    const access_token = await this.tokens.signAccess(user);
+    // OAuth 2.1 refresh rotation: each refresh token is single-use.
+    const refresh_token = await this.tokens.signRefresh(user);
+    await this.store.saveRefreshToken(refresh_token, claims.sub);
+    await this.store.revokeRefreshToken(refreshToken);
+    return { access_token, token_type: 'bearer', expires_in: 900, refresh_token, scope: 'mcp' };
+  }
+
+  // mcpAuthRouter exposes /revoke (and advertises revocation_endpoint) because this exists.
+  // RFC 7009: revoking an unknown or already-revoked token is a success no-op. Access tokens
+  // are stateless 15-minute JWTs and expire on their own; only refresh tokens live in Redis.
+  async revokeToken(_client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
+    await this.store.revokeRefreshToken(request.token);
   }
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
-    const claims = await this.tokens.verify(token);
+    const claims = await this.tokens.verifyAccess(token);
     return {
       token,
       clientId: claims.sub,

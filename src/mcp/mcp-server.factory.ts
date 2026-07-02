@@ -30,6 +30,26 @@ export function assertWrite(role: string): void {
 export function toolError(message: string) {
   return { isError: true as const, content: [{ type: 'text' as const, text: message }] };
 }
+
+// NestJS HttpExceptions built from an object (our services throw
+// `new BadRequestException({ error: { code, message } })`) stringify to just the class
+// name ("Bad Request Exception"), which tells the model nothing. Dig out the real message.
+export function errorMessage(e: unknown, fallback: string): string {
+  if (
+    e &&
+    typeof e === 'object' &&
+    'getResponse' in e &&
+    typeof (e as { getResponse: unknown }).getResponse === 'function'
+  ) {
+    const r = (e as { getResponse(): unknown }).getResponse();
+    if (typeof r === 'string') return r;
+    const body = r as { error?: { message?: unknown }; message?: unknown };
+    const nested = body?.error?.message ?? body?.message;
+    if (typeof nested === 'string') return nested;
+    if (Array.isArray(nested)) return nested.join('; ');
+  }
+  return e instanceof Error && e.message ? e.message : fallback;
+}
 export function toolJson(data: unknown) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],

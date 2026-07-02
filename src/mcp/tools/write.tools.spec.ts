@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerWriteTools } from './write.tools';
 
@@ -38,5 +39,20 @@ describe('write tools', () => {
     const get = reg({ jobs: { createJob } });
     await get('create_job').handler({ title: 'Engineer' }, member);
     expect(createJob).toHaveBeenCalledWith(expect.objectContaining({ title: 'Engineer' }), 'o1');
+  });
+
+  it('surfaces nested HttpException messages instead of the exception class name', async () => {
+    const updateStage = jest
+      .fn()
+      .mockRejectedValue(
+        new BadRequestException({ error: { code: 'INVALID_STAGE', message: 'Stage does not belong to the job.' } }),
+      );
+    const get = reg({ candidates: { updateStage } });
+    const res = await get('move_candidate_stage').handler(
+      { candidate_id: '11111111-1111-1111-1111-111111111111', hiring_stage_id: '22222222-2222-2222-2222-222222222222' },
+      member,
+    );
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('Stage does not belong to the job.');
   });
 });
