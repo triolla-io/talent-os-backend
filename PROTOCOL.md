@@ -13,6 +13,8 @@ This document is the single source of truth for all API endpoints supported by t
 
 ## 1. Candidates API
 
+Roles: `GET` endpoints — any authenticated user. `POST` / `PATCH` / `DELETE` endpoints — any role except `viewer`; a viewer gets `403` `{ "error": { "code": "FORBIDDEN", "message": "Viewers have read-only access" } }`.
+
 ### `GET /candidates/counts`
 
 Retrieve lightweight counts for dashboard alerts.
@@ -259,6 +261,7 @@ Create a new candidate profile, optionally with a CV file upload.
 **Errors:**
 
 - `400 Bad Request` — validation failed
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 - `409 Conflict` — `EMAIL_EXISTS` (email already belongs to a candidate) or `PHONE_EXISTS` (phone matches an existing candidate on digits)
 - `500 Internal Server Error` — server error
 
@@ -300,6 +303,7 @@ Assign many candidates to one job and AI-score each of them against it.
 **Errors:**
 
 - `400 Bad Request` — `VALIDATION_ERROR` (empty list, more than 200 ids, malformed UUID), `JOB_NOT_OPEN`, `NO_STAGES`
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 - `404 Not Found` — job not found in this tenant
 
 ### `GET /candidates/:id/cv-url`
@@ -364,6 +368,7 @@ Update candidate profile fields and/or assign to a job pipeline.
 
 - `400 Bad Request` — validation failed or ALREADY_ASSIGNED
 - `400 No Stages` — job has no enabled hiring stages
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 - `404 Not Found` — candidate not found
 
 ### `POST /candidates/:id/cv`
@@ -388,6 +393,7 @@ Upload a replacement CV. Re-extracts text, regenerates the AI summary, and re-sc
 **Errors:**
 
 - `400 Bad Request` — missing `cv_file`, file over 10 MB, or invalid file type.
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`).
 - `404 Not Found` — candidate not found.
 
 ### `POST /candidates/:id/score/revert`
@@ -404,6 +410,7 @@ Clear a manual score override and return to an AI score.
 
 **Errors:**
 
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`).
 - `404 Not Found` — candidate not found.
 
 ### `POST /candidates/:id/reject`
@@ -420,6 +427,7 @@ Reject a candidate — sets `candidate.status = 'rejected'` and updates their Ap
 
 **Errors:**
 
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 - `404 Not Found` — candidate not found
 
 ### `POST /candidates/:id/stages/:stage_id/summary`
@@ -451,6 +459,7 @@ Save or update a free-text summary for a specific hiring stage the candidate has
 
 - `404 Not Found` — candidate not found
 - `400 Bad Request` — candidate not assigned to a job, or stage does not belong to candidate's job
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 
 ### `POST /candidates/:id/stages/:stage_id/advance`
 
@@ -482,6 +491,7 @@ Composite action: saves the summary for the current stage AND advances the candi
 
 - `404 Not Found` — candidate not found
 - `400 Bad Request` — candidate not assigned to a job, current stage not found, or candidate already at last stage
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 
 ### `PATCH /candidates/:id/stage`
 
@@ -503,15 +513,25 @@ Update a candidate's hiring stage (used for Kanban board drag-and-drop).
 }
 ```
 
+**Errors:**
+
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
+
 ### `DELETE /candidates/:id`
 
 Hard-delete a candidate and all related data (applications, scores, flags).
 
 **Response:** `204 No Content`
 
+**Errors:**
+
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
+
 ---
 
 ## 2. Jobs API
+
+Roles: `GET` endpoints — any authenticated user. `POST` / `PUT` / `DELETE` endpoints — any role except `viewer` (`403 FORBIDDEN`, same body as the Candidates API).
 
 ### `GET /jobs`
 
@@ -699,6 +719,7 @@ Create a new job opening.
 **Errors:**
 
 - `400 Bad Request` — validation failed
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 - `500 Internal Server Error` — server error
 
 ### `PUT /jobs/:id`
@@ -722,6 +743,7 @@ Update an existing job opening.
 **Errors:**
 
 - `400 Bad Request` — validation failed
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 - `404 Not Found` — job not found
 - `500 Internal Server Error` — server error
 
@@ -737,6 +759,7 @@ Soft-delete a job (sets status to `closed`).
 
 **Errors:**
 
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 - `404 Not Found` — job not found
 - `500 Internal Server Error` — server error
 
@@ -747,6 +770,10 @@ Hard-delete a job and all related data (stages, questions, applications, scores)
 - Candidates linked to this job will have their `job_id` and `hiring_stage_id` set to `null`.
 
 **Response:** `204 No Content`
+
+**Errors:**
+
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
 
 ### `GET /jobs/list`
 
@@ -1505,6 +1532,7 @@ All error responses follow this structure:
   }
   ```
 - `NOT_FOUND` — requested resource not found
+- `FORBIDDEN` — HTTP `403`: the caller's role does not allow the action (e.g. a `viewer` calling a candidate or job mutation)
 - `UNAUTHORIZED` — authentication failed (webhooks only)
 
 ---

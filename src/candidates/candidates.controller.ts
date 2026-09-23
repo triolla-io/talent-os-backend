@@ -20,6 +20,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { SessionGuard } from '../auth/session.guard';
+import { DenyViewer } from '../auth/deny-viewer.guard';
 import { CandidatesService } from './candidates.service';
 import type { CandidateFilter } from './candidates.service';
 import { CreateCandidateSchema } from './dto/create-candidate.dto';
@@ -119,6 +120,7 @@ export class CandidatesController {
    * @returns Newly created candidate with assigned hiring stage
    */
   @Post()
+  @DenyViewer()
   @UseInterceptors(FileInterceptor('cv_file'))
   async create(
     @Req() req: Request,
@@ -151,6 +153,7 @@ export class CandidatesController {
    * stage on the target job keeps it — voice auto-advance always wins.
    */
   @Post('bulk-assign')
+  @DenyViewer()
   @HttpCode(202)
   async bulkAssign(@Body() body: unknown, @Req() req: Request): Promise<{ queued: number }> {
     const tenantId = req.session!.org;
@@ -169,6 +172,7 @@ export class CandidatesController {
    * Updates both candidate.hiringStageId and application.jobStageId atomically.
    */
   @Patch(':id/stage')
+  @DenyViewer()
   async updateStage(@Param('id') id: string, @Body() body: unknown, @Req() req: Request): Promise<{ success: boolean }> {
     const tenantId = req.session!.org;
     const result = UpdateCandidateStageSchema.safeParse(body);
@@ -193,6 +197,7 @@ export class CandidatesController {
    * - Applications + CandidateJobScores (cascade)
    */
   @Delete(':id')
+  @DenyViewer()
   @HttpCode(204)
   async delete(@Param('id') id: string, @Req() req: Request): Promise<void> {
     const tenantId = req.session!.org;
@@ -208,6 +213,7 @@ export class CandidatesController {
    * @returns Updated CandidateResponse
    */
   @Patch(':id')
+  @DenyViewer()
   async updateCandidate(@Param('id') id: string, @Body() body: unknown, @Req() req: Request): Promise<CandidateResponse> {
     const tenantId = req.session!.org;
     const result = UpdateCandidateSchema.safeParse(body);
@@ -225,6 +231,7 @@ export class CandidatesController {
    * @returns Updated CandidateResponse with is_rejected: true
    */
   @Post(':id/reject')
+  @DenyViewer()
   @HttpCode(200)
   async rejectCandidate(@Param('id') id: string, @Body() body: unknown, @Req() req: Request): Promise<CandidateResponse> {
     const tenantId = req.session!.org;
@@ -243,6 +250,7 @@ export class CandidatesController {
    * @returns Updated CandidateResponse
    */
   @Post(':id/score/revert')
+  @DenyViewer()
   @HttpCode(200)
   async revertScore(@Param('id') id: string, @Req() req: Request): Promise<CandidateResponse> {
     const tenantId = req.session!.org;
@@ -255,6 +263,7 @@ export class CandidatesController {
    * @returns Updated CandidateResponse
    */
   @Post(':id/cv')
+  @DenyViewer()
   @UseInterceptors(FileInterceptor('cv_file'))
   async uploadCv(
     @Param('id') id: string,
@@ -275,6 +284,7 @@ export class CandidatesController {
    * @returns { success: true }
    */
   @Post(':id/stages/:stage_id/summary')
+  @DenyViewer()
   @HttpCode(200)
   async saveStageSummary(
     @Param('id') id: string,
@@ -299,6 +309,7 @@ export class CandidatesController {
    * @returns { success: true, hiring_stage_id: string } — the new stage UUID
    */
   @Post(':id/stages/:stage_id/advance')
+  @DenyViewer()
   @HttpCode(200)
   async advanceWithSummary(
     @Param('id') id: string,

@@ -16,6 +16,7 @@ import {
 import type { Request } from 'express';
 import { ZodError } from 'zod';
 import { SessionGuard } from '../auth/session.guard';
+import { DenyViewer } from '../auth/deny-viewer.guard';
 import { JobsService } from './jobs.service';
 import { CreateJobSchema, CreateJobDto } from './dto/create-job.dto';
 
@@ -43,6 +44,7 @@ export class JobsController {
   }
 
   @Post()
+  @DenyViewer()
   async create(@Body() body: unknown, @Req() req: Request) {
     const tenantId = req.session!.org;
     const dto = this.parseJobBody(body);
@@ -50,6 +52,7 @@ export class JobsController {
   }
 
   @Put(':id')
+  @DenyViewer()
   async update(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
     const tenantId = req.session!.org;
     const dto = this.parseJobBody(body);
@@ -71,6 +74,7 @@ export class JobsController {
 
   /** Soft-delete (status → closed) */
   @Delete(':id')
+  @DenyViewer()
   @HttpCode(204)
   async delete(@Param('id') id: string, @Req() req: Request) {
     const tenantId = req.session!.org;
@@ -95,6 +99,7 @@ export class JobsController {
    * - Candidates linked to the job get jobId and hiringStageId set to null (SetNull)
    */
   @Delete(':id/hard')
+  @DenyViewer()
   @HttpCode(204)
   async hardDelete(@Param('id') id: string, @Req() req: Request) {
     const tenantId = req.session!.org;
