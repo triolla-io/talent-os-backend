@@ -1,10 +1,14 @@
 import { CanActivate, ExecutionContext, INestApplication, RequestMethod, Type } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
+import cookieParser from 'cookie-parser';
 import type { Request } from 'express';
 import request from 'supertest';
 import { SessionGuard } from './session.guard';
-import { JwtPayload } from './jwt.service';
+import { JwtPayload, JwtService } from './jwt.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CandidatesController } from '../candidates/candidates.controller';
 import { CandidatesService } from '../candidates/candidates.service';
 import { BulkAssignService } from '../bulk-assign/bulk-assign.service';
@@ -234,5 +238,71 @@ describe('Viewers are read-only on the candidates and jobs API', () => {
       role = 'viewer';
       await request(app.getHttpServer()).get(path).expect(200);
     });
+  });
+});
+
+// The same guards wired as production wires them (auth.module.ts): SessionGuard as the global
+// APP_GUARD, a real signed session cookie, and the role read from the user row, not the token.
+describe('Viewer block behind the real SessionGuard', () => {
+  const prisma = { user: { findUnique: jest.fn() } };
+  let app: INestApplication;
+  let jwt: JwtService;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [CandidatesController, JobsController],
+      providers: [
+        { provide: CandidatesService, useValue: candidates },
+        { provide: BulkAssignService, useValue: bulkAssign },
+        { provide: JobsService, useValue: jobs },
+        { provide: ConfigService, useValue: { getOrThrow: () => 'test-secret-with-at-least-32-characters' } },
+        { provide: PrismaService, useValue: prisma },
+        JwtService,
+        SessionGuard,
+        { provide: APP_GUARD, useExisting: SessionGuard },
+      ],
+    }).compile();
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+    jwt = moduleRef.get(JwtService);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const sessionCookie = async (tokenRole: JwtPayload['role']): Promise<string> =>
+    `talent_os_session=${await jwt.sign({ sub: 'user-uuid', org: TENANT_ID, role: tokenRole })}`;
+
+  const userRow = (dbRole: JwtPayload['role']) => ({ isActive: true, role: dbRole, organizationId: TENANT_ID });
+
+  it('refuses a user demoted to viewer even while their token still says admin', async () => {
+    prisma.user.findUnique.mockResolvedValue(userRow('viewer'));
+    await request(app.getHttpServer())
+      .patch(`/candidates/${CAND_ID}/stage`)
+      .set('Cookie', await sessionCookie('admin'))
+      .send({ hiring_stage_id: STAGE_ID })
+      .expect(403);
+    expect(candidates.updateStage).not.toHaveBeenCalled();
+  });
+
+  it('lets a user promoted to member through even while their token still says viewer', async () => {
+    prisma.user.findUnique.mockResolvedValue(userRow('member'));
+    await request(app.getHttpServer())
+      .patch(`/candidates/${CAND_ID}/stage`)
+      .set('Cookie', await sessionCookie('viewer'))
+      .send({ hiring_stage_id: STAGE_ID })
+      .expect(200);
+    expect(candidates.updateStage).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers 401, not 403, without a session cookie: the session check runs first', async () => {
+    await request(app.getHttpServer()).delete(`/jobs/${JOB_ID}/hard`).expect(401);
+    expect(jobs.hardDeleteJob).not.toHaveBeenCalled();
   });
 });
