@@ -613,6 +613,37 @@ export class CandidatesService {
   }
 
   /**
+   * Undo a reject (Quick Review's undo). Back to `status = 'active'` with the rejection reason
+   * and note cleared, and the job's applications that reject marked 'rejected' return to 'new' —
+   * the only other value application.stage is ever written with. Reject never touches the hiring
+   * stage, so the candidate comes back in the stage they were in. Idempotent.
+   */
+  async unrejectCandidate(candidateId: string, tenantId: string): Promise<CandidateResponse> {
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id: candidateId, tenantId },
+      select: { id: true, jobId: true },
+    });
+
+    if (!candidate) throw new NotFoundException({ error: { code: 'NOT_FOUND', message: 'Candidate not found' } });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.candidate.update({
+        where: { id: candidateId },
+        data: { status: 'active', rejectionReason: null, rejectionNote: null },
+      });
+
+      if (candidate.jobId) {
+        await tx.application.updateMany({
+          where: { candidateId, jobId: candidate.jobId, tenantId, stage: 'rejected' },
+          data: { stage: 'new' },
+        });
+      }
+    });
+
+    return this.findOne(candidateId, tenantId);
+  }
+
+  /**
    * Re-scores a candidate against its assigned job and writes the denormalized
    * aiScore. Callers MUST ensure the candidate has a jobId and non-blank cvText.
    * Reuses the reassignment scoring shape (ScoringAgentService + CandidateJobScore).

@@ -1675,3 +1675,96 @@ describe('CandidatesService.getCvBytes()', () => {
     await expect(service.getCvBytes('cand-1', TENANT_ID)).rejects.toThrow('R2 network timeout');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CandidatesService.unrejectCandidate() — Quick Review's undo of a reject
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CandidatesService.unrejectCandidate()', () => {
+  const TENANT_ID = '11111111-1111-1111-1111-111111111111';
+  const CAND_ID = 'cand-uuid';
+
+  let service: CandidatesService;
+  let mockPrisma: { candidate: { findFirst: jest.Mock }; $transaction: jest.Mock };
+  let txCandidate: { update: jest.Mock };
+  let txApplication: { updateMany: jest.Mock };
+  let findOneSpy: jest.SpyInstance;
+
+  beforeEach(async () => {
+    txCandidate = { update: jest.fn().mockResolvedValue({ id: CAND_ID }) };
+    txApplication = { updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    mockPrisma = {
+      candidate: { findFirst: jest.fn().mockResolvedValue({ id: CAND_ID, jobId: 'job-uuid' }) },
+      $transaction: jest
+        .fn()
+        .mockImplementation(
+          async (fn: (tx: { candidate: typeof txCandidate; application: typeof txApplication }) => unknown) => {
+            const result = await fn({ candidate: txCandidate, application: txApplication });
+            return result;
+          },
+        ),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CandidatesService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: StorageService, useValue: { uploadFromBuffer: jest.fn() } },
+        { provide: ScoringAgentService, useValue: { score: jest.fn() } },
+        { provide: CandidateAiService, useValue: { generateSummary: jest.fn() } },
+        { provide: AttachmentExtractorService, useValue: { extract: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get<CandidatesService>(CandidatesService);
+    // findOne has its own coverage; here it only has to hand back the refreshed row.
+    findOneSpy = jest.spyOn(service, 'findOne').mockResolvedValue({ id: CAND_ID, is_rejected: false } as never);
+  });
+
+  afterEach(() => jest.clearAllMocks());
+
+  it('reactivates the candidate and clears the rejection reason and note', async () => {
+    await service.unrejectCandidate(CAND_ID, TENANT_ID);
+    expect(txCandidate.update).toHaveBeenCalledWith({
+      where: { id: CAND_ID },
+      data: { status: 'active', rejectionReason: null, rejectionNote: null },
+    });
+  });
+
+  it("returns only the job's rejected applications to 'new'", async () => {
+    await service.unrejectCandidate(CAND_ID, TENANT_ID);
+    expect(txApplication.updateMany).toHaveBeenCalledWith({
+      where: { candidateId: CAND_ID, jobId: 'job-uuid', tenantId: TENANT_ID, stage: 'rejected' },
+      data: { stage: 'new' },
+    });
+  });
+
+  it('writes both rows in one transaction and returns the refreshed candidate', async () => {
+    const result = await service.unrejectCandidate(CAND_ID, TENANT_ID);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(findOneSpy).toHaveBeenCalledWith(CAND_ID, TENANT_ID);
+    expect(result).toEqual({ id: CAND_ID, is_rejected: false });
+  });
+
+  it('is idempotent: an active candidate gets the same harmless writes and a normal answer', async () => {
+    txApplication.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.unrejectCandidate(CAND_ID, TENANT_ID)).resolves.toEqual({ id: CAND_ID, is_rejected: false });
+  });
+
+  it('touches only the candidate row when there is no job', async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue({ id: CAND_ID, jobId: null });
+    await service.unrejectCandidate(CAND_ID, TENANT_ID);
+    expect(txCandidate.update).toHaveBeenCalledTimes(1);
+    expect(txApplication.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("throws NOT_FOUND for a missing id or another tenant's id (the lookup is tenant-scoped)", async () => {
+    mockPrisma.candidate.findFirst.mockResolvedValue(null);
+    await expect(service.unrejectCandidate('other-tenant-cand', TENANT_ID)).rejects.toThrow(NotFoundException);
+    expect(mockPrisma.candidate.findFirst).toHaveBeenCalledWith({
+      where: { id: 'other-tenant-cand', tenantId: TENANT_ID },
+      select: { id: true, jobId: true },
+    });
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+});

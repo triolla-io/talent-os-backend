@@ -46,6 +46,7 @@ const candidates = {
   deleteCandidate: jest.fn().mockResolvedValue(undefined),
   updateCandidate: jest.fn().mockResolvedValue({ id: CAND_ID }),
   rejectCandidate: jest.fn().mockResolvedValue({ id: CAND_ID, is_rejected: true }),
+  unrejectCandidate: jest.fn().mockResolvedValue({ id: CAND_ID, is_rejected: false }),
   revertScore: jest.fn().mockResolvedValue({ id: CAND_ID }),
   uploadCv: jest.fn().mockResolvedValue({ id: CAND_ID }),
   saveStageSummary: jest.fn().mockResolvedValue({ success: true }),
@@ -106,6 +107,12 @@ const MUTATIONS: Mutation[] = [
     send: (http) => http.post(`/candidates/${CAND_ID}/reject`).send({ reason: 'not_a_fit' }),
     status: 200,
     service: candidates.rejectCandidate,
+  },
+  {
+    route: 'POST /candidates/:id/unreject',
+    send: (http) => http.post(`/candidates/${CAND_ID}/unreject`),
+    status: 200,
+    service: candidates.unrejectCandidate,
   },
   {
     route: 'POST /candidates/:id/score/revert',

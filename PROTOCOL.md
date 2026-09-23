@@ -417,13 +417,33 @@ Clear a manual score override and return to an AI score.
 
 Reject a candidate — sets `candidate.status = 'rejected'` and updates their Application stage to 'rejected'. Idempotent: safe to call multiple times.
 
-**Request Body:** Empty object
+**Request Body:**
 
 ```json
-{}
+{
+  "reason": "not_a_fit",
+  "note": "Optional free text"
+}
 ```
 
+- `reason` (required): one of `not_a_fit`, `overqualified`, `underqualified`, `failed_screening`, `compensation_mismatch`, `culture_fit`, `other`.
+- `note` (optional): string, at most 500 characters.
+
 **Response:** `200 OK` (returns full CandidateResponse with `is_rejected: true`)
+
+**Errors:**
+
+- `400 Bad Request` — `VALIDATION_ERROR` (`reason` missing or not in the list, or `note` over 500 characters)
+- `403 Forbidden` — `FORBIDDEN` (caller is a `viewer`)
+- `404 Not Found` — candidate not found
+
+### `POST /candidates/:id/unreject`
+
+Undo a reject (Quick Review's undo). Sets `candidate.status = 'active'`, clears `rejection_reason` and `rejection_note`, and returns the job's Applications that are `'rejected'` to `'new'`. Reject never changes the hiring stage, so the candidate comes back in the same stage. Idempotent: on an active candidate nothing changes and the answer is still `200`.
+
+**Request Body:** none
+
+**Response:** `200 OK` (returns full CandidateResponse with `is_rejected: false`)
 
 **Errors:**
 

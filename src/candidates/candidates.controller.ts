@@ -245,6 +245,19 @@ export class CandidatesController {
   }
 
   /**
+   * Undo a reject (Quick Review) — status back to 'active', rejection reason and note cleared, the
+   * job's application back from 'rejected' to 'new'. The hiring stage is unchanged. Idempotent.
+   * @returns Updated CandidateResponse with is_rejected: false
+   */
+  @Post(':id/unreject')
+  @DenyViewer()
+  @HttpCode(200)
+  async unrejectCandidate(@Param('id') id: string, @Req() req: Request): Promise<CandidateResponse> {
+    const tenantId = req.session!.org;
+    return this.candidatesService.unrejectCandidate(id, tenantId);
+  }
+
+  /**
    * TO-58: clear a manual match-score override and return to an AI score.
    * Re-scores the assigned job immediately; nulls the score when no job/CV text.
    * @returns Updated CandidateResponse

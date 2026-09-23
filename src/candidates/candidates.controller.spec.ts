@@ -53,6 +53,7 @@ describe('CandidatesController (Integration Tests)', () => {
       findAll: jest.fn(),
       findOne: jest.fn(),
       getCvBytes: jest.fn(),
+      unrejectCandidate: jest.fn(),
     };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -142,6 +143,33 @@ describe('CandidatesController (Integration Tests)', () => {
       const res = await request(app.getHttpServer()).get('/candidates/cand-uuid/cv-file').expect(404);
 
       expect(res.body.error.code).toBe('NO_CV');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // POST /candidates/:id/unreject (Quick Review undo)
+  // ─────────────────────────────────────────────────────────────────
+
+  describe('POST /candidates/:id/unreject', () => {
+    it('restores the candidate and answers 200 with is_rejected false', async () => {
+      const unrejectSpy = jest
+        .spyOn(candidatesService, 'unrejectCandidate')
+        .mockResolvedValue({ ...mockCandidateResponse, is_rejected: false } as never);
+
+      const res = await request(app.getHttpServer()).post('/candidates/cand-uuid/unreject').expect(200);
+
+      expect((res.body as { is_rejected: boolean }).is_rejected).toBe(false);
+      expect(unrejectSpy).toHaveBeenCalledWith('cand-uuid', TENANT_ID);
+    });
+
+    it('answers 404 NOT_FOUND for an unknown candidate', async () => {
+      jest
+        .spyOn(candidatesService, 'unrejectCandidate')
+        .mockRejectedValue(new NotFoundException({ error: { code: 'NOT_FOUND', message: 'Candidate not found' } }));
+
+      const res = await request(app.getHttpServer()).post('/candidates/missing/unreject').expect(404);
+
+      expect((res.body as { error: { code: string } }).error.code).toBe('NOT_FOUND');
     });
   });
 
